@@ -1,6 +1,7 @@
 ﻿using MessagePack;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace AYLib.GenericDataLogger
 {
@@ -19,19 +20,104 @@ namespace AYLib.GenericDataLogger
     public class Class1
     {
         private Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
-        private Dictionary<string, string> typeList = new Dictionary<string, string>();
-
+        
         public Class1()
         {
             Signature.ToByteArray();
 
-            typeList.Add("ThisTest", typeof(Class1).FullName);
+            Header headerData = new Header();
 
-            var data = MessagePackSerializer.Serialize(typeList);
-            var back = MessagePackSerializer.Deserialize<Dictionary<string, string>>(data);
+            headerData.TypeRegistrations.Add(0, new TypeRegistration(0, typeof(Class1)));
+            headerData.TypeRegistrations.Add(1, new TypeRegistration(1, typeof(Class1)));
+            headerData.TypeRegistrations.Add(2, new TypeRegistration(2, typeof(Class1)));
 
-            var bin = MessagePackSerializer.Typeless.Serialize(typeList);
-            var objModel = MessagePackSerializer.Typeless.Deserialize(bin) as Dictionary<string, string>;
+            //var data = MessagePackSerializer.Serialize(typeList);
+            //var back = MessagePackSerializer.Deserialize<Dictionary<string, string>>(data);
+
+            //var bin = MessagePackSerializer.Typeless.Serialize(typeList);
+            //var objModel = MessagePackSerializer.Typeless.Deserialize(bin) as Dictionary<string, string>;
+
+            try
+            {
+                //TypeRegistration newReg = new TypeRegistration(0, typeof(Class1));
+                var data = MessagePackSerializer.Serialize(headerData);
+                var back = MessagePackSerializer.Deserialize<Header>(data);
+
+                //using (var fileStream = new FileStream("", FileMode.Append, FileAccess.Write, FileShare.None))
+                //{
+                //    WriteDataBlock(fileStream);
+                //}
+
+                using (var memStream = new MemoryStream())
+                {
+                    WriteDataBlock(memStream);
+                }
+            }
+            catch(Exception ex)
+            {
+
+            }
+        }
+
+        public void RegisterType(Type newType)
+        {
+
+        }
+
+        public void WriteDataBlock(Stream targetStream)
+        {
+            using (var bWriter = new BinaryWriter(targetStream))
+            {
+                bWriter.Write(543543534);
+            }
+        }
+    }
+
+    [MessagePackObject]
+    public class Header
+    {
+        [Key(0)]
+        public Dictionary<int, TypeRegistration> TypeRegistrations { get; set; }
+
+        public Header()
+        {
+            TypeRegistrations = new Dictionary<int, TypeRegistration>();
+        }
+    }
+
+    [MessagePackObject]
+    public class TypeRegistration
+    {
+        private Type linkedType;
+
+        [Key(0)]
+        public int RefID { get; set; }
+
+        [Key(1)]
+        public string LongName { get; set; }
+
+        [IgnoreMember]
+        public Type ClassType
+        {
+            get
+            {
+                if (linkedType == null)
+                    return Type.GetType(LongName);
+                return linkedType;
+            }
+        }
+
+        public TypeRegistration()
+        {
+
+        }
+
+        public TypeRegistration(int refID, Type newType)
+        {
+            linkedType = newType;
+
+            RefID = refID;
+            LongName = newType.FullName;
         }
     }
 
