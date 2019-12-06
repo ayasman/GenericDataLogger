@@ -1,16 +1,49 @@
 using AYLib.GenericDataLogger;
+using MessagePack;
 using System;
+using System.IO;
 using Xunit;
 
 namespace BehaviourTreeTests
 {
+    [MessagePackObject]
+    public class TestData
+    {
+        [Key(0)]
+        public int TestInt { get; set; }
+
+        public TestData()
+        {
+            TestInt = 675;
+        }
+    }
+
+
     public class ActionNodeTests
     {
         [Fact]
         public void TestSuccess()
         {
-            Class1 dfsafds = new Class1();
+            DataLoggerWriter writer = new DataLoggerWriter();
+            writer.RegisterType(typeof(TestData));
 
+            writer.CreateHeader();
+
+            writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
+            writer.FlushBuffer();
+
+            //var mem = new MemoryStream();
+            var mem = new FileStream(@"OutputTest.bin", FileMode.Create);
+
+            writer.WriteTo(mem);
+
+            writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
+
+            writer.FlushBuffer();
+
+            writer.WriteTo(mem);
+
+            mem.Dispose();
         }
 
         //[Fact]
