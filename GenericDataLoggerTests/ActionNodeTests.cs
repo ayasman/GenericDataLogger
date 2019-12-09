@@ -7,8 +7,13 @@ using Xunit;
 namespace BehaviourTreeTests
 {
     [MessagePackObject]
-    public class TestData
+    public class TestData : IReplayData
     {
+        private Guid id = Guid.NewGuid();
+
+        [IgnoreMember]
+        public Guid ReplayDataID => id;
+
         [Key(0)]
         public int TestInt { get; set; }
 
@@ -24,26 +29,47 @@ namespace BehaviourTreeTests
         [Fact]
         public void TestSuccess()
         {
-            DataLoggerWriter writer = new DataLoggerWriter();
-            writer.RegisterType(typeof(TestData));
+            TestData data = new TestData();
 
-            writer.CreateHeader();
+            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy");
+            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
-            writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
-            writer.FlushBuffer();
+            writer.Update(data);
 
-            //var mem = new MemoryStream();
-            var mem = new FileStream(@"OutputTest.bin", FileMode.Create);
+            writer.WriteBuffer(0);
 
-            writer.WriteTo(mem);
+            writer.FlushToFile();
 
-            writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
+            writer.Dispose();
 
-            writer.FlushBuffer();
 
-            writer.WriteTo(mem);
 
-            mem.Dispose();
+
+
+
+
+
+
+            //DataLoggerWriter writer = new DataLoggerWriter();
+            //writer.RegisterType(typeof(TestData));
+
+            //writer.CreateHeader();
+
+            //writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
+            //writer.FlushBuffer();
+
+            ////var mem = new MemoryStream();
+            //var mem = new FileStream(@"OutputTest.bin", FileMode.Create);
+
+            //writer.WriteTo(mem);
+
+            //writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
+
+            //writer.FlushBuffer();
+
+            //writer.WriteTo(mem);
+
+            //mem.Dispose();
         }
 
         //[Fact]

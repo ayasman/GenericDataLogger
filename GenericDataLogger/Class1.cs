@@ -1,4 +1,6 @@
 ﻿using MessagePack;
+using MessagePack.Formatters;
+using MessagePack.LZ4;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -6,6 +8,19 @@ using System.IO;
 
 namespace AYLib.GenericDataLogger
 {
+    [Flags]
+    public enum BlockDataTypes
+    {
+        Header      = 0b_0000,
+        Full        = 0b_0010,
+        Partial     = 0b_0100,
+    }
+
+    public interface IReplayData
+    {
+        Guid ReplayDataID { get; }
+    }
+
     /// <summary>
     /// What does a file need in order to be appended to but remain a binary/compressable format?
     /// 
@@ -18,15 +33,119 @@ namespace AYLib.GenericDataLogger
     /// Protobuf Data
     /// JSON binary data
     /// </summary>
-    public class DataLogger : IDisposable
+    public class ReplayWriter : IDisposable
     {
         protected Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
 
-        public virtual Header HeaderData => null;
+        private Dictionary<Guid, IReplayData> updatedData = new Dictionary<Guid, IReplayData>();
+        private HashSet<Guid> recentUpdates = new HashSet<Guid>();
 
-        public DataLogger()
+        private object writerLock = new object();
+
+        private string outputFileName;
+        private Stream fileStream;
+
+        private WriteDataBuffer dataBuffer = new WriteDataBuffer();
+        private Header headerData = new Header();
+        private bool headerWritten = false;
+
+        public ReplayWriter()
         {
 
+        }
+
+        public ReplayWriter(string fileName)
+        {
+            Initialize(fileName);
+        }
+
+        public void Initialize(string fileName)
+        {
+            outputFileName = fileName;
+            fileStream = new FileStream(outputFileName, FileMode.Create);
+            headerWritten = false;
+        }
+
+        public void RegisterType(Type newType, BlockDataTypes outputType)
+        {
+            headerData.RegisterType(newType, outputType);
+        }
+
+        private void CreateHeader(long timeStamp)
+        {
+            dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, (uint)BlockDataTypes.Header, timeStamp, true);
+            dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.Serialize(headerData), -1, (uint)BlockDataTypes.Header, timeStamp);
+        }
+
+        public void Update(IReplayData data)
+        {
+            lock (writerLock)
+            {
+                if (!updatedData.ContainsKey(data.ReplayDataID))
+                    updatedData.Add(data.ReplayDataID, data);
+                else
+                    updatedData[data.ReplayDataID] = data;
+
+                if (!recentUpdates.Contains(data.ReplayDataID))
+                    recentUpdates.Add(data.ReplayDataID);
+            }
+        }
+
+        public void WriteBuffer(long timeStamp, bool partial = false)
+        {
+            lock (writerLock)
+            {
+                if (!headerWritten)
+                    CreateHeader(timeStamp);
+
+                if (partial)
+                {
+                    foreach(var dataID in recentUpdates)
+                    {
+                        try
+                        {
+                            var data = updatedData[dataID];
+                            var dataType = data.GetType();
+
+                            if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Partial) == BlockDataTypes.Partial)
+                            {
+                                var typeID = headerData.GetRegistrationID(dataType);
+                                dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data), typeID, (uint)BlockDataTypes.Partial, timeStamp);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var data in updatedData.Values)
+                    {
+                        try
+                        {
+                            var dataType = data.GetType();
+                            if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Full) == BlockDataTypes.Full)
+                            {
+                                var typeID = headerData.GetRegistrationID(dataType);
+                                dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data), typeID, (uint)BlockDataTypes.Full, timeStamp);
+                            }
+                        }
+                        catch(Exception ex)
+                        {
+
+                        }
+                    }
+                }
+
+                recentUpdates.Clear();
+            }
+        }
+
+        public void FlushToFile()
+        {
+            dataBuffer.WriteTo(fileStream);
         }
 
         #region IDisposable Support
@@ -38,12 +157,14 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-
+                    fileStream.Dispose();
+                    dataBuffer.Dispose();
                 }
 
                 disposedValue = true;
             }
         }
+
         public void Dispose()
         {
             Dispose(true);
@@ -51,66 +172,100 @@ namespace AYLib.GenericDataLogger
         #endregion
     }
 
-    public class DataLoggerWriter : DataLogger
-    {
-        private WriteDataBuffer dataBuffer = new WriteDataBuffer();
-        private Header headerData = new Header();
-        private ConcurrentQueue<byte[]> outputBuffer = new ConcurrentQueue<byte[]>();
+    
+    //public class DataLogger : IDisposable
+    //{
+    //    protected Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
 
-        public override Header HeaderData => headerData;
+    //    public virtual Header HeaderData => null;
 
-        public DataLoggerWriter() :
-            base()
-        {
+    //    public DataLogger()
+    //    {
 
-        }
+    //    }
 
-        public void RegisterType(Type newType)
-        {
-            headerData.RegisterType(newType);
-        }
+    //    #region IDisposable Support
+    //    private bool disposedValue = false;
 
-        public void CreateHeader()
-        {
-            dataBuffer.WriteDataBlock(Signature.ToByteArray(), true);
-            dataBuffer.WriteDataBlock(MessagePackSerializer.Serialize(headerData));
-        }
+    //    protected virtual void Dispose(bool disposing)
+    //    {
+    //        if (!disposedValue)
+    //        {
+    //            if (disposing)
+    //            {
 
-        public void WriteData(byte[] data)
-        {
-            outputBuffer.Enqueue(data);
-        }
+    //            }
 
-        public void FlushBuffer()
-        {
-            byte[] data;
-            while (outputBuffer.TryDequeue(out data))
-                dataBuffer.WriteDataBlock(data);
-        }
+    //            disposedValue = true;
+    //        }
+    //    }
+    //    public void Dispose()
+    //    {
+    //        Dispose(true);
+    //    }
+    //    #endregion
+    //}
 
-        public void WriteTo(Stream target)
-        {
-            dataBuffer.WriteTo(target);
-        }
+    //public class DataLoggerWriter : DataLogger
+    //{
+    //    private WriteDataBuffer dataBuffer = new WriteDataBuffer();
+    //    private Header headerData = new Header();
+    //    private ConcurrentQueue<byte[]> outputBuffer = new ConcurrentQueue<byte[]>();
 
-        #region IDisposable Support
-        private bool disposedValue = false;
+    //    public override Header HeaderData => headerData;
 
-        protected override void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    dataBuffer.Dispose();
-                }
+    //    public DataLoggerWriter() :
+    //        base()
+    //    {
 
-                disposedValue = true;
-            }
-            base.Dispose();
-        }
-        #endregion
-    }
+    //    }
+
+    //    public void RegisterType(Type newType)
+    //    {
+    //        headerData.RegisterType(newType);
+    //    }
+
+    //    public void CreateHeader()
+    //    {
+    //        dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, true);
+    //        dataBuffer.WriteDataBlock(MessagePackSerializer.Serialize(headerData), -1);
+    //    }
+
+    //    public void WriteData(byte[] data)
+    //    {
+    //        outputBuffer.Enqueue(data);
+    //    }
+
+    //    public void FlushBuffer()
+    //    {
+    //        byte[] data;
+    //        while (outputBuffer.TryDequeue(out data))
+    //            dataBuffer.WriteDataBlock(data, -1);
+    //    }
+
+    //    public void WriteTo(Stream target)
+    //    {
+    //        dataBuffer.WriteTo(target);
+    //    }
+
+    //    #region IDisposable Support
+    //    private bool disposedValue = false;
+
+    //    protected override void Dispose(bool disposing)
+    //    {
+    //        if (!disposedValue)
+    //        {
+    //            if (disposing)
+    //            {
+    //                dataBuffer.Dispose();
+    //            }
+
+    //            disposedValue = true;
+    //        }
+    //        base.Dispose();
+    //    }
+    //    #endregion
+    //}
 
     public class WriteDataBuffer : IDisposable
     {
@@ -137,12 +292,16 @@ namespace AYLib.GenericDataLogger
             }
         }
 
-        public void WriteDataBlock(byte[] data, bool isSignature = false)
+        public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool isSignature = false)
         {
             lock (writerLock)
             {
                 if (!isSignature)
-                    binaryWriter.Write(data.Length);
+                {
+                    var metaBlock = LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+                    binaryWriter.Write(metaBlock.Length);
+                    binaryWriter.Write(metaBlock);
+                }
                 binaryWriter.Write(data);
             }
         }
@@ -183,18 +342,36 @@ namespace AYLib.GenericDataLogger
     [MessagePackObject]
     public class Header
     {
+        private Dictionary<Type, int> registrationIDs = new Dictionary<Type, int>();
+
         [Key(0)]
-        public Dictionary<int, TypeRegistration> TypeRegistrations { get; set; }
+        public Dictionary<int, TypeRegistration> TypeRegistrations { get; set; } = new Dictionary<int, TypeRegistration>();
 
         public Header()
         {
-            TypeRegistrations = new Dictionary<int, TypeRegistration>();
+
         }
 
-        public void RegisterType(Type newType)
+        public void RegisterType(Type newType, BlockDataTypes outputType)
         {
             int id = TypeRegistrations.Count;
-            TypeRegistrations.Add(id, new TypeRegistration(id, newType));
+            TypeRegistrations.Add(id, new TypeRegistration(id, newType, outputType));
+            registrationIDs.Add(newType, id);
+        }
+
+        public int GetRegistrationID(Type findType)
+        {
+            return registrationIDs[findType];
+        }
+
+        public BlockDataTypes GetRegistrationOutput(Type findType)
+        {
+            return TypeRegistrations[registrationIDs[findType]].OutputType;
+        }
+
+        public Type GetRegistrationType(int findID)
+        {
+            return TypeRegistrations[findID].ClassType;
         }
     }
 
@@ -220,22 +397,50 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        [IgnoreMember]
+        public BlockDataTypes OutputType { get; set; }
+
         public TypeRegistration()
         {
 
         }
 
-        public TypeRegistration(int refID, Type newType)
+        public TypeRegistration(int refID, Type newType, BlockDataTypes outputType)
         {
             linkedType = newType;
 
             RefID = refID;
             LongName = newType.FullName;
+            OutputType = outputType;
         }
     }
 
-    internal class DataBlock
+    [MessagePackObject]
+    public class BlockMetadata
     {
+        [Key(0)]
+        public int TypeID { get; set; }
 
+        [Key(1)]
+        public long TimeStamp { get; set; }
+
+        [Key(2)]
+        public int BlockSize { get; set; }
+
+        [Key(3)]
+        public uint BlockType { get; set; }
+
+        public BlockMetadata()
+        {
+
+        }
+
+        public BlockMetadata(int typeID, long timeStamp, int blockSize, uint blockType)
+        {
+            TypeID = typeID;
+            TimeStamp = timeStamp;
+            BlockSize = blockSize;
+            BlockType = blockType;
+        }
     }
 }
