@@ -9,11 +9,11 @@ using System.IO;
 namespace AYLib.GenericDataLogger
 {
     [Flags]
-    public enum BlockDataTypes
+    public enum BlockDataTypes : byte
     {
-        Header      = 0b_0000,
-        Full        = 0b_0010,
-        Partial     = 0b_0100,
+        Header      = 0b0000,
+        Full        = 0b0010,
+        Partial     = 0b0100,
     }
 
     public interface IReplayData
@@ -42,6 +42,8 @@ namespace AYLib.GenericDataLogger
 
         private object writerLock = new object();
 
+        private readonly bool encode = false;
+
         private string outputFileName;
         private Stream fileStream;
 
@@ -54,8 +56,10 @@ namespace AYLib.GenericDataLogger
 
         }
 
-        public ReplayWriter(string fileName)
+        public ReplayWriter(string fileName, bool encode)
         {
+            this.encode = encode;
+
             Initialize(fileName);
         }
 
@@ -74,7 +78,12 @@ namespace AYLib.GenericDataLogger
         private void CreateHeader(long timeStamp)
         {
             dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, (uint)BlockDataTypes.Header, timeStamp, true);
-            dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.Serialize(headerData), -1, (uint)BlockDataTypes.Header, timeStamp);
+            dataBuffer.WriteDataBlock(
+                encode ? LZ4MessagePackSerializer.Serialize(headerData) : MessagePackSerializer.Serialize(headerData), 
+                -1, 
+                (uint)BlockDataTypes.Header, 
+                timeStamp,
+                encode);
         }
 
         public void Update(IReplayData data)
@@ -110,7 +119,12 @@ namespace AYLib.GenericDataLogger
                             if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Partial) == BlockDataTypes.Partial)
                             {
                                 var typeID = headerData.GetRegistrationID(dataType);
-                                dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data), typeID, (uint)BlockDataTypes.Partial, timeStamp);
+                                dataBuffer.WriteDataBlock(
+                                    encode ? LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data) : MessagePackSerializer.NonGeneric.Serialize(dataType, data), 
+                                    typeID, 
+                                    (uint)BlockDataTypes.Partial, 
+                                    timeStamp,
+                                    encode);
                             }
                         }
                         catch (Exception ex)
@@ -129,7 +143,12 @@ namespace AYLib.GenericDataLogger
                             if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Full) == BlockDataTypes.Full)
                             {
                                 var typeID = headerData.GetRegistrationID(dataType);
-                                dataBuffer.WriteDataBlock(LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data), typeID, (uint)BlockDataTypes.Full, timeStamp);
+                                dataBuffer.WriteDataBlock(
+                                    encode ? LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data) : MessagePackSerializer.NonGeneric.Serialize(dataType, data), 
+                                    typeID, 
+                                    (uint)BlockDataTypes.Full, 
+                                    timeStamp,
+                                    encode);
                             }
                         }
                         catch(Exception ex)
@@ -292,13 +311,15 @@ namespace AYLib.GenericDataLogger
             }
         }
 
-        public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool isSignature = false)
+        public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool encode, bool isSignature = false)
         {
             lock (writerLock)
             {
                 if (!isSignature)
                 {
-                    var metaBlock = LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+                    var metaBlock = encode ? 
+                                        LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType)) :
+                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
                     binaryWriter.Write(metaBlock.Length);
                     binaryWriter.Write(metaBlock);
                 }

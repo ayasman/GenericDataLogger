@@ -31,7 +31,7 @@ namespace BehaviourTreeTests
         {
             TestData data = new TestData();
 
-            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy");
+            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.Update(data);
