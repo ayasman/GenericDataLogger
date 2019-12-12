@@ -14,6 +14,7 @@ namespace AYLib.GenericDataLogger
         Header      = 0b0000,
         Full        = 0b0010,
         Partial     = 0b0100,
+        Immediate   = 0b1000
     }
 
     public interface IReplayData
@@ -43,6 +44,7 @@ namespace AYLib.GenericDataLogger
         private object writerLock = new object();
 
         private readonly bool encode = false;
+        private readonly bool clearBufferOnWrite = false;
 
         private string outputFileName;
         private Stream fileStream;
@@ -56,9 +58,10 @@ namespace AYLib.GenericDataLogger
 
         }
 
-        public ReplayWriter(string fileName, bool encode)
+        public ReplayWriter(string fileName, bool encode, bool clearBufferOnWrite)
         {
             this.encode = encode;
+            this.clearBufferOnWrite = clearBufferOnWrite;
 
             Initialize(fileName);
         }
@@ -97,6 +100,31 @@ namespace AYLib.GenericDataLogger
 
                 if (!recentUpdates.Contains(data.ReplayDataID))
                     recentUpdates.Add(data.ReplayDataID);
+            }
+        }
+
+        public void Write(long timeStamp, IReplayData data)
+        {
+            lock (writerLock)
+            {
+                if (!headerWritten)
+                    CreateHeader(timeStamp);
+
+                try
+                {
+                    var dataType = data.GetType();
+                    var typeID = headerData.GetRegistrationID(dataType);
+                    dataBuffer.WriteDataBlock(
+                        encode ? LZ4MessagePackSerializer.NonGeneric.Serialize(dataType, data) : MessagePackSerializer.NonGeneric.Serialize(dataType, data),
+                        typeID,
+                        (uint)BlockDataTypes.Immediate,
+                        timeStamp,
+                        encode);
+                }
+                catch (Exception ex)
+                {
+
+                }
             }
         }
 
@@ -159,6 +187,9 @@ namespace AYLib.GenericDataLogger
                 }
 
                 recentUpdates.Clear();
+
+                if (clearBufferOnWrite)
+                    updatedData.Clear();
             }
         }
 
@@ -189,6 +220,29 @@ namespace AYLib.GenericDataLogger
             Dispose(true);
         }
         #endregion
+    }
+
+    public class ReplayReader
+    {
+        private readonly bool encoded = false;
+
+        private Stream fileStream;
+        private string inputFileName;
+
+        private ReadDataBuffer dataBuffer = new ReadDataBuffer();
+
+        public ReplayReader(string fileName, bool encoded)
+        {
+            this.encoded = encoded;
+
+            Initialize(fileName);
+        }
+
+        public void Initialize(string fileName)
+        {
+            inputFileName = fileName;
+            fileStream = new FileStream(inputFileName, FileMode.Open);
+        }
     }
 
     
@@ -285,6 +339,72 @@ namespace AYLib.GenericDataLogger
     //    }
     //    #endregion
     //}
+
+    public class ReadDataBuffer
+    {
+        private MemoryStream memoryStream;
+        private BinaryReader binaryReader;
+        private object readerLock = new object();
+
+        public ReadDataBuffer()
+        {
+            InitStreams();
+        }
+
+        private void InitStreams()
+        {
+            lock (readerLock)
+            {
+                if (binaryReader != null)
+                {
+                    binaryReader.Dispose();
+                }
+
+                memoryStream = new MemoryStream();
+                binaryReader = new BinaryReader(memoryStream, System.Text.Encoding.Default, true);
+            }
+        }
+
+        public byte[] ReadDataBlock(int typeID, uint blockType, long timeStamp, bool encode, bool isSignature = false)
+        {
+            byte[] retBlock = null;
+            lock (readerLock)
+            {
+                if (isSignature)
+                {
+                   // binaryReader.ReadBytes();
+
+
+                    //var metaBlock = encode ?
+                    //                    LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType)) :
+                    //                    MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+                    //binaryWriter.Write(metaBlock.Length);
+                    //binaryWriter.Write(metaBlock);
+                }
+                else
+                {
+                    int metaBlockSize = binaryReader.ReadInt32();
+                    byte[] metaDataBytes = binaryReader.ReadBytes(metaBlockSize);
+
+                    var metaData = MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+
+                    byte[] dataBytes = binaryReader.ReadBytes(metaData.BlockSize);
+                }
+                //binaryWriter.Write(data);
+            }
+            return retBlock;
+        }
+
+        public void ReadFrom(Stream source)
+        {
+            lock (readerLock)
+            {
+                source.Position = 0;
+                source.CopyTo(memoryStream);
+                memoryStream.Position = 0;
+            }
+        }
+    }
 
     public class WriteDataBuffer : IDisposable
     {

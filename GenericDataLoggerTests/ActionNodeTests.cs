@@ -29,18 +29,24 @@ namespace BehaviourTreeTests
         [Fact]
         public void TestSuccess()
         {
-            TestData data = new TestData();
+            var fileStream = new FileStream(@"TestReplayOutput.rpy", FileMode.Open);
 
-            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true);
-            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
+            var reader = new ReadDataBuffer();
+            reader.ReadFrom(fileStream);
 
-            writer.Update(data);
 
-            writer.WriteBuffer(0);
+            //TestData data = new TestData();
 
-            writer.FlushToFile();
+            //ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true, false);
+            //writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
-            writer.Dispose();
+            //writer.Update(data);
+
+            //writer.WriteBuffer(0);
+
+            //writer.FlushToFile();
+
+            //writer.Dispose();
 
 
 
