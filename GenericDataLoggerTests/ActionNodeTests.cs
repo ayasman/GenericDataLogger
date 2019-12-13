@@ -29,10 +29,19 @@ namespace BehaviourTreeTests
         [Fact]
         public void TestSuccess()
         {
-            var fileStream = new FileStream(@"TestReplayOutput.rpy", FileMode.Open);
+            //var fileStream = new FileStream(@"TestReplayOutput.rpy", FileMode.Open);
 
-            var reader = new ReadDataBuffer();
-            reader.ReadFrom(fileStream);
+            //var reader = new ReadDataBuffer();
+            //reader.ReadFrom(fileStream);
+
+            //reader.ReadDataBlock(true, out int typeID, out uint blockType, out long timeStamp);
+
+
+
+            ReplayReader reader = new ReplayReader(@"TestReplayOutput.rpy", true);
+            reader.ReadFromFile();
+            reader.ReadHeader();
+
 
 
             //TestData data = new TestData();

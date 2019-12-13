@@ -11,10 +11,11 @@ namespace AYLib.GenericDataLogger
     [Flags]
     public enum BlockDataTypes : byte
     {
-        Header      = 0b0000,
-        Full        = 0b0010,
-        Partial     = 0b0100,
-        Immediate   = 0b1000
+        Signature   = 0b00000,
+        Header      = 0b00010,
+        Full        = 0b00100,
+        Partial     = 0b01000,
+        Immediate   = 0b10000
     }
 
     public interface IReplayData
@@ -80,7 +81,7 @@ namespace AYLib.GenericDataLogger
 
         private void CreateHeader(long timeStamp)
         {
-            dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, (uint)BlockDataTypes.Header, timeStamp, true);
+            dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, encode);
             dataBuffer.WriteDataBlock(
                 encode ? LZ4MessagePackSerializer.Serialize(headerData) : MessagePackSerializer.Serialize(headerData), 
                 -1, 
@@ -226,6 +227,9 @@ namespace AYLib.GenericDataLogger
     {
         private readonly bool encoded = false;
 
+        private Guid signature;
+        private Header headerData;
+
         private Stream fileStream;
         private string inputFileName;
 
@@ -242,6 +246,24 @@ namespace AYLib.GenericDataLogger
         {
             inputFileName = fileName;
             fileStream = new FileStream(inputFileName, FileMode.Open);
+        }
+
+        public void ReadFromFile()
+        {
+            dataBuffer.ReadFrom(fileStream);
+        }
+
+        public void ReadHeader()
+        {
+            dataBuffer.ResetToStart();
+            byte[] sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+            signature = new Guid(sigData);
+
+            byte[] header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
+            headerData = encoded ? 
+                            LZ4MessagePackSerializer.Deserialize<Header>(header) : 
+                            MessagePackSerializer.Deserialize<Header>(header);
+            headerData.ResetRegistrationIDs();
         }
     }
 
@@ -365,32 +387,33 @@ namespace AYLib.GenericDataLogger
             }
         }
 
-        public byte[] ReadDataBlock(int typeID, uint blockType, long timeStamp, bool encode, bool isSignature = false)
+        public byte[] ReadDataBlock(bool encoded, out int typeID, out uint blockType, out long timeStamp)
         {
             byte[] retBlock = null;
             lock (readerLock)
             {
-                if (isSignature)
-                {
-                   // binaryReader.ReadBytes();
-
-
-                    //var metaBlock = encode ?
-                    //                    LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType)) :
-                    //                    MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
-                    //binaryWriter.Write(metaBlock.Length);
-                    //binaryWriter.Write(metaBlock);
-                }
-                else
-                {
+                //if (isSignature)
+                //{
+                //    int sigLength = binaryReader.ReadInt32();
+                //    byte[] signature = binaryReader.ReadBytes(sigLength);
+                //    typeID = -1;
+                //    blockType = (uint)BlockDataTypes.Header;
+                //    timeStamp = metaData.TimeStamp;
+                //}
+                //else
+                //{
                     int metaBlockSize = binaryReader.ReadInt32();
                     byte[] metaDataBytes = binaryReader.ReadBytes(metaBlockSize);
 
-                    var metaData = MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+                    var metaData = encoded ?
+                                    LZ4MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes):
+                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
 
-                    byte[] dataBytes = binaryReader.ReadBytes(metaData.BlockSize);
-                }
-                //binaryWriter.Write(data);
+                    retBlock = binaryReader.ReadBytes(metaData.BlockSize);
+                    typeID = metaData.TypeID;
+                    blockType = metaData.BlockType;
+                    timeStamp = metaData.TimeStamp;
+                //}
             }
             return retBlock;
         }
@@ -401,6 +424,14 @@ namespace AYLib.GenericDataLogger
             {
                 source.Position = 0;
                 source.CopyTo(memoryStream);
+                memoryStream.Position = 0;
+            }
+        }
+
+        public void ResetToStart()
+        {
+            lock (readerLock)
+            {
                 memoryStream.Position = 0;
             }
         }
@@ -431,18 +462,22 @@ namespace AYLib.GenericDataLogger
             }
         }
 
-        public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool encode, bool isSignature = false)
+        public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool encode)
         {
             lock (writerLock)
             {
-                if (!isSignature)
-                {
+                //if (!isSignature)
+                //{
                     var metaBlock = encode ? 
                                         LZ4MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType)) :
                                         MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
                     binaryWriter.Write(metaBlock.Length);
                     binaryWriter.Write(metaBlock);
-                }
+                //}
+                //else
+                //{
+                //    binaryWriter.Write(data.Length);
+                //}
                 binaryWriter.Write(data);
             }
         }
@@ -500,6 +535,23 @@ namespace AYLib.GenericDataLogger
             registrationIDs.Add(newType, id);
         }
 
+        public void ResetRegistrationIDs()
+        {
+            registrationIDs.Clear();
+
+            try
+            {
+                foreach (var reg in TypeRegistrations)
+                {
+                    registrationIDs.Add(reg.Value.ClassType, reg.Key);
+                }
+            }
+            catch(Exception ex)
+            {
+
+            }
+        }
+
         public int GetRegistrationID(Type findType)
         {
             return registrationIDs[findType];
@@ -527,19 +579,19 @@ namespace AYLib.GenericDataLogger
         [Key(1)]
         public string LongName { get; set; }
 
+        [Key(2)]
+        public BlockDataTypes OutputType { get; set; }
+
         [IgnoreMember]
         public Type ClassType
         {
             get
             {
                 if (linkedType == null)
-                    return Type.GetType(LongName);
+                    linkedType = Type.GetType(LongName);
                 return linkedType;
             }
         }
-
-        [IgnoreMember]
-        public BlockDataTypes OutputType { get; set; }
 
         public TypeRegistration()
         {
@@ -551,7 +603,7 @@ namespace AYLib.GenericDataLogger
             linkedType = newType;
 
             RefID = refID;
-            LongName = newType.FullName;
+            LongName = newType.AssemblyQualifiedName;
             OutputType = outputType;
         }
     }
