@@ -5,6 +5,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 
 namespace AYLib.GenericDataLogger
 {
@@ -37,7 +39,7 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class ReplayWriter : IDisposable
     {
-        protected Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
+        public static Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
 
         private Dictionary<Guid, IReplayData> updatedData = new Dictionary<Guid, IReplayData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
@@ -53,6 +55,8 @@ namespace AYLib.GenericDataLogger
         private WriteDataBuffer dataBuffer = new WriteDataBuffer();
         private Header headerData = new Header();
         private bool headerWritten = false;
+
+        public Header HeaderData => headerData;
 
         public ReplayWriter()
         {
@@ -72,6 +76,11 @@ namespace AYLib.GenericDataLogger
             outputFileName = fileName;
             fileStream = new FileStream(outputFileName, FileMode.Create);
             headerWritten = false;
+        }
+
+        public void RegisterVersion(uint majorVersion, uint minorVersion, uint revision)
+        {
+            headerData.RegisterVersion(majorVersion, minorVersion, revision);
         }
 
         public void RegisterType(Type newType, BlockDataTypes outputType)
@@ -223,8 +232,26 @@ namespace AYLib.GenericDataLogger
         #endregion
     }
 
-    public class ReplayReader
+    public class ReadReplayData
     {
+        public long Timestamp { get; private set; }
+
+        public BlockDataTypes BlockType { get; private set; }
+
+        public object DataBlock { get; private set; }
+
+        public ReadReplayData(long timeStamp, object dataBlock, BlockDataTypes blockType)
+        {
+            Timestamp = timeStamp;
+            DataBlock = dataBlock;
+            BlockType = blockType;
+        }
+    }
+
+    public class ReplayReader : IDisposable
+    {
+        private Subject<ReadReplayData> onDataRead = new Subject<ReadReplayData>();
+
         private readonly bool encoded = false;
 
         private Guid signature;
@@ -235,6 +262,12 @@ namespace AYLib.GenericDataLogger
 
         private ReadDataBuffer dataBuffer = new ReadDataBuffer();
 
+        public IObservable<ReadReplayData> WhenDataRead => onDataRead.Publish().RefCount();
+
+        public Guid Signature => signature;
+
+        public Header HeaderData => headerData;
+        
         public ReplayReader(string fileName, bool encoded)
         {
             this.encoded = encoded;
@@ -255,118 +288,107 @@ namespace AYLib.GenericDataLogger
 
         public void ReadHeader()
         {
-            dataBuffer.ResetToStart();
-            byte[] sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+            byte[] sigData = null;
+            byte[] header = null;
+            if (dataBuffer.BufferFilled)
+            {
+                dataBuffer.ResetToStart();
+                sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+                header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
+            }
+            else
+            {
+                var fileReader = new BinaryReader(fileStream, System.Text.Encoding.Default, true);
+                sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
+                header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp, fileReader);
+                fileReader.Dispose();
+            }
             signature = new Guid(sigData);
-
-            byte[] header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
-            headerData = encoded ? 
-                            LZ4MessagePackSerializer.Deserialize<Header>(header) : 
-                            MessagePackSerializer.Deserialize<Header>(header);
+            headerData = encoded ?
+                LZ4MessagePackSerializer.Deserialize<Header>(header) :
+                MessagePackSerializer.Deserialize<Header>(header);
             headerData.ResetRegistrationIDs();
         }
+
+        public void ReadData(long timeToReadTo = long.MaxValue)
+        {
+            var fileReader = new BinaryReader(fileStream, System.Text.Encoding.Default, true);
+
+            bool doRead = true;
+            while (doRead)
+            {
+                byte[] dataBlock = null;
+                int typeID = -1;
+                uint blockType;
+                long timeStamp;
+
+                if (dataBuffer.BufferFilled)
+                {
+                    if (dataBuffer.IsEndOfStream)
+                        break;
+                    dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp);
+                }
+                else
+                {
+                    if (fileStream.Length == fileStream.Position)
+                        break;
+                    dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp, fileReader);
+                }
+
+                if (timeToReadTo!= long.MaxValue && timeToReadTo >= timeStamp)
+                {
+                    dataBuffer.RewindOneBlock();
+                    break;
+                }
+
+                var dataType = headerData.GetRegistrationType(typeID);
+                if (dataType != null)
+                {
+                    var deserializedData = encoded ?
+                                                LZ4MessagePackSerializer.NonGeneric.Deserialize(dataType, dataBlock) :
+                                                MessagePackSerializer.NonGeneric.Deserialize(dataType, dataBlock);
+                    onDataRead.OnNext(new ReadReplayData(timeStamp, deserializedData, (BlockDataTypes)blockType));
+                }
+            }
+
+            fileReader.Dispose();
+        }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    fileStream.Dispose();
+                    dataBuffer.Dispose();
+                    onDataRead.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+        #endregion
     }
 
-    
-    //public class DataLogger : IDisposable
-    //{
-    //    protected Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
-
-    //    public virtual Header HeaderData => null;
-
-    //    public DataLogger()
-    //    {
-
-    //    }
-
-    //    #region IDisposable Support
-    //    private bool disposedValue = false;
-
-    //    protected virtual void Dispose(bool disposing)
-    //    {
-    //        if (!disposedValue)
-    //        {
-    //            if (disposing)
-    //            {
-
-    //            }
-
-    //            disposedValue = true;
-    //        }
-    //    }
-    //    public void Dispose()
-    //    {
-    //        Dispose(true);
-    //    }
-    //    #endregion
-    //}
-
-    //public class DataLoggerWriter : DataLogger
-    //{
-    //    private WriteDataBuffer dataBuffer = new WriteDataBuffer();
-    //    private Header headerData = new Header();
-    //    private ConcurrentQueue<byte[]> outputBuffer = new ConcurrentQueue<byte[]>();
-
-    //    public override Header HeaderData => headerData;
-
-    //    public DataLoggerWriter() :
-    //        base()
-    //    {
-
-    //    }
-
-    //    public void RegisterType(Type newType)
-    //    {
-    //        headerData.RegisterType(newType);
-    //    }
-
-    //    public void CreateHeader()
-    //    {
-    //        dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, true);
-    //        dataBuffer.WriteDataBlock(MessagePackSerializer.Serialize(headerData), -1);
-    //    }
-
-    //    public void WriteData(byte[] data)
-    //    {
-    //        outputBuffer.Enqueue(data);
-    //    }
-
-    //    public void FlushBuffer()
-    //    {
-    //        byte[] data;
-    //        while (outputBuffer.TryDequeue(out data))
-    //            dataBuffer.WriteDataBlock(data, -1);
-    //    }
-
-    //    public void WriteTo(Stream target)
-    //    {
-    //        dataBuffer.WriteTo(target);
-    //    }
-
-    //    #region IDisposable Support
-    //    private bool disposedValue = false;
-
-    //    protected override void Dispose(bool disposing)
-    //    {
-    //        if (!disposedValue)
-    //        {
-    //            if (disposing)
-    //            {
-    //                dataBuffer.Dispose();
-    //            }
-
-    //            disposedValue = true;
-    //        }
-    //        base.Dispose();
-    //    }
-    //    #endregion
-    //}
-
-    public class ReadDataBuffer
+    public class ReadDataBuffer : IDisposable
     {
+        private bool bufferFilled = false;
         private MemoryStream memoryStream;
         private BinaryReader binaryReader;
         private object readerLock = new object();
+
+        private long lastBlockStartPosition = 0;
+
+        public bool BufferFilled => bufferFilled;
 
         public ReadDataBuffer()
         {
@@ -387,33 +409,37 @@ namespace AYLib.GenericDataLogger
             }
         }
 
-        public byte[] ReadDataBlock(bool encoded, out int typeID, out uint blockType, out long timeStamp)
+        public bool IsEndOfStream
+        {
+            get
+            {
+                lock (readerLock)
+                {
+                    return binaryReader.BaseStream.Length == binaryReader.BaseStream.Position;
+                }
+            }
+        }
+
+        public byte[] ReadDataBlock(bool encoded, out int typeID, out uint blockType, out long timeStamp, BinaryReader overrideReader = null)
         {
             byte[] retBlock = null;
             lock (readerLock)
             {
-                //if (isSignature)
-                //{
-                //    int sigLength = binaryReader.ReadInt32();
-                //    byte[] signature = binaryReader.ReadBytes(sigLength);
-                //    typeID = -1;
-                //    blockType = (uint)BlockDataTypes.Header;
-                //    timeStamp = metaData.TimeStamp;
-                //}
-                //else
-                //{
-                    int metaBlockSize = binaryReader.ReadInt32();
-                    byte[] metaDataBytes = binaryReader.ReadBytes(metaBlockSize);
+                BinaryReader localReader = overrideReader != null ? overrideReader : binaryReader;
 
-                    var metaData = encoded ?
-                                    LZ4MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes):
-                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+                lastBlockStartPosition = localReader.BaseStream.Position;
 
-                    retBlock = binaryReader.ReadBytes(metaData.BlockSize);
-                    typeID = metaData.TypeID;
-                    blockType = metaData.BlockType;
-                    timeStamp = metaData.TimeStamp;
-                //}
+                int metaBlockSize = localReader.ReadInt32();
+                byte[] metaDataBytes = localReader.ReadBytes(metaBlockSize);
+
+                var metaData = encoded ?
+                                LZ4MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes):
+                                MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+
+                retBlock = localReader.ReadBytes(metaData.BlockSize);
+                typeID = metaData.TypeID;
+                blockType = metaData.BlockType;
+                timeStamp = metaData.TimeStamp;
             }
             return retBlock;
         }
@@ -425,6 +451,15 @@ namespace AYLib.GenericDataLogger
                 source.Position = 0;
                 source.CopyTo(memoryStream);
                 memoryStream.Position = 0;
+                bufferFilled = true;
+            }
+        }
+
+        public void RewindOneBlock()
+        {
+            lock (readerLock)
+            {
+                memoryStream.Position = lastBlockStartPosition;
             }
         }
 
@@ -435,6 +470,29 @@ namespace AYLib.GenericDataLogger
                 memoryStream.Position = 0;
             }
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    binaryReader.Dispose();
+                    memoryStream.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+        #endregion
     }
 
     public class WriteDataBuffer : IDisposable
@@ -523,9 +581,25 @@ namespace AYLib.GenericDataLogger
         [Key(0)]
         public Dictionary<int, TypeRegistration> TypeRegistrations { get; set; } = new Dictionary<int, TypeRegistration>();
 
+        [Key(1)]
+        public uint MajorVersion { get; set; }
+
+        [Key(2)]
+        public uint MinorVersion { get; set; }
+
+        [Key(3)]
+        public uint Revision { get; set; }
+
         public Header()
         {
 
+        }
+
+        public void RegisterVersion(uint majorVersion, uint minorVersion, uint revision)
+        {
+            MajorVersion = majorVersion;
+            MinorVersion = minorVersion;
+            Revision = revision;
         }
 
         public void RegisterType(Type newType, BlockDataTypes outputType)

@@ -1,6 +1,8 @@
+using AutoFixture;
 using AYLib.GenericDataLogger;
 using MessagePack;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Xunit;
 
@@ -9,39 +11,108 @@ namespace BehaviourTreeTests
     [MessagePackObject]
     public class TestData : IReplayData
     {
-        private Guid id = Guid.NewGuid();
-
-        [IgnoreMember]
-        public Guid ReplayDataID => id;
-
         [Key(0)]
+        public Guid ReplayDataID { get; set; }
+
+        [Key(1)]
         public int TestInt { get; set; }
+
+        [Key(2)]
+        public long TestLong { get; set; }
+
+        [Key(3)]
+        public double TestDouble { get; set; }
+
+        [Key(4)]
+        public string TestString { get; set; }
 
         public TestData()
         {
-            TestInt = 675;
+
         }
     }
 
+    internal class TestDataEqualityComparer : IEqualityComparer<TestData>
+    {
+        public bool Equals(TestData x, TestData y)
+        {
+            if (x.ReplayDataID == y.ReplayDataID &&
+                x.TestInt == y.TestInt &&
+                x.TestLong == y.TestLong &&
+                x.TestDouble == y.TestDouble &&
+                x.TestString == y.TestString)
+                return true;
+            return false;
+        }
+
+        public int GetHashCode(TestData obj)
+        {
+            return EqualityComparer<TestData>.Default.GetHashCode(obj);
+        }
+
+    }
 
     public class ActionNodeTests
     {
-        [Fact]
-        public void TestSuccess()
+        Fixture fixture = new Fixture();
+        List<TestData> initialTestData;
+
+        public ActionNodeTests()
         {
-            //var fileStream = new FileStream(@"TestReplayOutput.rpy", FileMode.Open);
+            initialTestData = new List<TestData>();
 
-            //var reader = new ReadDataBuffer();
-            //reader.ReadFrom(fileStream);
+            for(int i=0; i<10; i++)
+            {
+                initialTestData.Add(fixture.Create<TestData>());
+            }
+        }
+    
+        [Fact]
+        public void TestWritingReadingFile()
+        {
+            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true, false);
+            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
+            writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
 
-            //reader.ReadDataBlock(true, out int typeID, out uint blockType, out long timeStamp);
+            foreach (var testData in initialTestData)
+                writer.Update(testData);
+
+            writer.WriteBuffer(0);
+            writer.FlushToFile();
+            writer.Dispose();
 
 
+            var readTestData = new List<TestData>();
 
             ReplayReader reader = new ReplayReader(@"TestReplayOutput.rpy", true);
+
+            reader.WhenDataRead.Subscribe(data =>
+            {
+                readTestData.Add(data.DataBlock as TestData);
+            });
+
             reader.ReadFromFile();
             reader.ReadHeader();
+            reader.ReadData();
 
+            reader.Dispose();
+
+            Assert.Equal(initialTestData, readTestData, new TestDataEqualityComparer());
+            Assert.Equal(initialTestData.Count, readTestData.Count);
+            Assert.Equal(ReplayWriter.Signature, reader.Signature);
+            Assert.Equal(writer.HeaderData.MajorVersion, reader.HeaderData.MajorVersion);
+            Assert.Equal(writer.HeaderData.MinorVersion, reader.HeaderData.MinorVersion);
+            Assert.Equal(writer.HeaderData.Revision, reader.HeaderData.Revision);
+        }
+
+        //[Fact]
+        public void TestSuccess()
+        {
+            //ReplayReader reader = new ReplayReader(@"TestReplayOutput.rpy", true);
+            ////reader.ReadFromFile();
+            //reader.ReadHeader();
+            //reader.ReadFromFile();
+            //reader.ReadHeader();
 
 
             //TestData data = new TestData();
@@ -86,61 +157,5 @@ namespace BehaviourTreeTests
 
             //mem.Dispose();
         }
-
-        //[Fact]
-        //public void TestFailure()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", (t, o) => BehaviourReturnCode.Failure);
-        //    Assert.Equal(BehaviourReturnCode.Failure, testNode.Visit(1, null));
-        //    Assert.Equal(BehaviourReturnCode.Failure, testNode.CurrentState);
-        //}
-
-        //[Fact]
-        //public void TestRunning()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", (t, o) => BehaviourReturnCode.Running);
-        //    Assert.Equal(BehaviourReturnCode.Running, testNode.Visit(1, null));
-        //    Assert.Equal(BehaviourReturnCode.Running, testNode.CurrentState);
-        //}
-
-        //[Fact]
-        //public void TestError()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", (t, o) => BehaviourReturnCode.Error);
-        //    Assert.Equal(BehaviourReturnCode.Error, testNode.Visit(1, null));
-        //    Assert.Equal(BehaviourReturnCode.Error, testNode.CurrentState);
-        //}
-
-        //[Fact]
-        //public void TestErrorNoFunction()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", null);
-        //    Assert.Equal(BehaviourReturnCode.Error, testNode.Visit(1, null));
-        //    Assert.Equal(BehaviourReturnCode.Error, testNode.CurrentState);
-        //}
-
-        //[Fact]
-        //public void TestGetState()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", (t, o) => BehaviourReturnCode.Success);
-        //    testNode.Visit(1, null);
-
-        //    var state = testNode.GetState();
-
-        //    Assert.NotNull(state);
-        //    Assert.Equal("TestNode", state.NodeName);
-        //    Assert.Equal(BehaviourReturnCode.Success, state.CurrentState);
-        //    Assert.Empty(state.Children);
-        //}
-
-        //[Fact]
-        //public void TestStateReset()
-        //{
-        //    ActionNode testNode = new ActionNode("TestNode", (t, o) => BehaviourReturnCode.Success);
-        //    testNode.Visit(1, null);
-        //    testNode.ResetState();
-
-        //    Assert.Equal(BehaviourReturnCode.Ready, testNode.CurrentState); 
-        //}
     }
 }
