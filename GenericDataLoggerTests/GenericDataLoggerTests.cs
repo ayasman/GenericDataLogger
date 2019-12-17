@@ -9,10 +9,10 @@ using Xunit;
 namespace BehaviourTreeTests
 {
     [MessagePackObject]
-    public class TestData : IReplayData
+    public class TestData : ISerializeData
     {
         [Key(0)]
-        public Guid ReplayDataID { get; set; }
+        public Guid SerializeDataID { get; set; }
 
         [Key(1)]
         public int TestInt { get; set; }
@@ -36,7 +36,7 @@ namespace BehaviourTreeTests
     {
         public bool Equals(TestData x, TestData y)
         {
-            if (x.ReplayDataID == y.ReplayDataID &&
+            if (x.SerializeDataID == y.SerializeDataID &&
                 x.TestInt == y.TestInt &&
                 x.TestLong == y.TestLong &&
                 x.TestDouble == y.TestDouble &&
@@ -52,12 +52,13 @@ namespace BehaviourTreeTests
 
     }
 
-    public class ActionNodeTests
+    public class GenericDataLoggerTests
     {
-        Fixture fixture = new Fixture();
-        List<TestData> initialTestData;
+        private string testOutputFile = @"TestReplayOutput.rpy";
+        private Fixture fixture = new Fixture();
+        private List<TestData> initialTestData;
 
-        public ActionNodeTests()
+        public GenericDataLoggerTests()
         {
             initialTestData = new List<TestData>();
 
@@ -68,9 +69,9 @@ namespace BehaviourTreeTests
         }
     
         [Fact]
-        public void TestWritingReadingFile()
+        public void TestWritingReadingFileEncoded()
         {
-            ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true, false);
+            SerializeWriter writer = new SerializeWriter(testOutputFile, true, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
 
@@ -84,7 +85,7 @@ namespace BehaviourTreeTests
 
             var readTestData = new List<TestData>();
 
-            ReplayReader reader = new ReplayReader(@"TestReplayOutput.rpy", true);
+            SerializeReader reader = new SerializeReader(testOutputFile, true);
 
             reader.WhenDataRead.Subscribe(data =>
             {
@@ -99,7 +100,7 @@ namespace BehaviourTreeTests
 
             Assert.Equal(initialTestData, readTestData, new TestDataEqualityComparer());
             Assert.Equal(initialTestData.Count, readTestData.Count);
-            Assert.Equal(ReplayWriter.Signature, reader.Signature);
+            Assert.Equal(SerializeWriter.Signature, reader.Signature);
             Assert.Equal(writer.HeaderData.MajorVersion, reader.HeaderData.MajorVersion);
             Assert.Equal(writer.HeaderData.MinorVersion, reader.HeaderData.MinorVersion);
             Assert.Equal(writer.HeaderData.Revision, reader.HeaderData.Revision);
