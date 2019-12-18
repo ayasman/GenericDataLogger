@@ -1,4 +1,5 @@
 ﻿using MessagePack;
+using MessagePack.Resolvers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +27,7 @@ namespace AYLib.GenericDataLogger
         public static Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
 
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
+        static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
@@ -113,9 +115,7 @@ namespace AYLib.GenericDataLogger
                     var dataType = data.GetType();
                     var typeID = headerData.GetRegistrationID(dataType);
                     dataBuffer.WriteDataBlock(
-                        encode ?
-                            MessagePackSerializer.Serialize(dataType, data, lz4Options) : 
-                            MessagePackSerializer.Serialize(dataType, data),
+                        Encode(typeID >= 0, dataType, data),
                         typeID,
                         (uint)BlockDataTypes.Immediate,
                         timeStamp,
@@ -143,14 +143,14 @@ namespace AYLib.GenericDataLogger
                         {
                             var data = updatedData[dataID];
                             var dataType = data.GetType();
+                            var outputType = headerData.GetRegistrationOutput(dataType);
 
-                            if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Partial) == BlockDataTypes.Partial)
+                            if ((outputType & BlockDataTypes.Partial) == BlockDataTypes.Partial ||
+                                 outputType == BlockDataTypes.None)
                             {
                                 var typeID = headerData.GetRegistrationID(dataType);
                                 dataBuffer.WriteDataBlock(
-                                    encode ?
-                                        MessagePackSerializer.Serialize(dataType, data, lz4Options) : 
-                                        MessagePackSerializer.Serialize(dataType, data),
+                                    Encode(typeID >= 0, dataType, data),
                                     typeID,
                                     (uint)BlockDataTypes.Partial,
                                     timeStamp,
@@ -170,13 +170,14 @@ namespace AYLib.GenericDataLogger
                         try
                         {
                             var dataType = data.GetType();
-                            if ((headerData.GetRegistrationOutput(dataType) & BlockDataTypes.Full) == BlockDataTypes.Full)
+                            var outputType = headerData.GetRegistrationOutput(dataType);
+
+                            if ((outputType & BlockDataTypes.Full) == BlockDataTypes.Full ||
+                                 outputType == BlockDataTypes.None)
                             {
                                 var typeID = headerData.GetRegistrationID(dataType);
                                 dataBuffer.WriteDataBlock(
-                                    encode ?
-                                        MessagePackSerializer.Serialize(dataType, data, lz4Options) : 
-                                        MessagePackSerializer.Serialize(dataType, data),
+                                    Encode(typeID >= 0, dataType, data),
                                     typeID,
                                     (uint)BlockDataTypes.Full,
                                     timeStamp,
@@ -195,6 +196,18 @@ namespace AYLib.GenericDataLogger
                 if (clearBufferOnWrite)
                     updatedData.Clear();
             }
+        }
+
+        private byte[] Encode(bool typed, Type dataType, ISerializeData data)
+        {
+            return typed ?
+                encode ?
+                    MessagePackSerializer.Serialize(dataType, data, lz4Options) :
+                    MessagePackSerializer.Serialize(dataType, data, MessagePackSerializerOptions.Standard)
+                        :
+                encode ?
+                    MessagePackSerializer.Serialize(dataType, data, lz4ContractlessOptions) :
+                    MessagePackSerializer.Serialize(dataType, data, MessagePack.Resolvers.ContractlessStandardResolver.Options);
         }
 
         public void FlushToFile()

@@ -111,6 +111,13 @@ namespace AYLib.GenericDataLogger
                                                 MessagePackSerializer.Deserialize(dataType, dataBlock);
                     onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
                 }
+                else
+                {
+                    var deserializedData = encoded ?
+                                                MessagePackSerializer.Typeless.Deserialize(dataBlock, lz4Options) :
+                                                MessagePackSerializer.Typeless.Deserialize(dataBlock);
+                    onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
+                }
             }
 
             fileReader.Dispose();

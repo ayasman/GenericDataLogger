@@ -60,16 +60,23 @@ namespace AYLib.GenericDataLogger
 
         public int GetRegistrationID(Type findType)
         {
+            if (!registrationIDs.ContainsKey(findType))
+                return -2;
             return registrationIDs[findType];
         }
 
         public BlockDataTypes GetRegistrationOutput(Type findType)
         {
+            if (!registrationIDs.ContainsKey(findType))
+                return BlockDataTypes.None;
+
             return TypeRegistrations[registrationIDs[findType]].OutputType;
         }
 
         public Type GetRegistrationType(int findID)
         {
+            if (!TypeRegistrations.ContainsKey(findID))
+                return null;
             return TypeRegistrations[findID].ClassType;
         }
     }

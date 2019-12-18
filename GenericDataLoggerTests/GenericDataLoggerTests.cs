@@ -8,22 +8,22 @@ using Xunit;
 
 namespace BehaviourTreeTests
 {
-    [MessagePackObject]
+    //[MessagePackObject]
     public class TestData : ISerializeData
     {
-        [Key(0)]
+        //[Key(0)]
         public Guid SerializeDataID { get; set; }
 
-        [Key(1)]
+        //[Key(1)]
         public int TestInt { get; set; }
 
-        [Key(2)]
+        //[Key(2)]
         public long TestLong { get; set; }
 
-        [Key(3)]
+        //[Key(3)]
         public double TestDouble { get; set; }
 
-        [Key(4)]
+       // [Key(4)]
         public string TestString { get; set; }
 
         public TestData()
@@ -72,7 +72,7 @@ namespace BehaviourTreeTests
         public void TestWritingReadingFileEncoded()
         {
             SerializeWriter writer = new SerializeWriter(testOutputFile, true, false);
-            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
+            //writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
 
             foreach (var testData in initialTestData)
