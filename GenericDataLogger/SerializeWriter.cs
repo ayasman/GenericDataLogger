@@ -24,10 +24,10 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class SerializeWriter : IDisposable
     {
-        public static Guid Signature = Guid.Parse("46429DF1-46C8-4C0D-8479-A3BCB6A87643");
+        
 
-        static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-        static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
+        private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
+        private static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
@@ -38,7 +38,7 @@ namespace AYLib.GenericDataLogger
         private readonly bool clearBufferOnWrite = false;
 
         private string outputFileName;
-        private Stream fileStream;
+        private Stream outputStream;
 
         private WriteDataBuffer dataBuffer = new WriteDataBuffer();
         private Header headerData = new Header();
@@ -46,24 +46,26 @@ namespace AYLib.GenericDataLogger
 
         public Header HeaderData => headerData;
 
-        public SerializeWriter()
+        public SerializeWriter(Stream outputStream, bool encode, bool clearBufferOnWrite)
         {
-
+            this.encode = encode;
+            this.clearBufferOnWrite = clearBufferOnWrite;
+            this.outputStream = outputStream;
+            headerWritten = false;
         }
 
         public SerializeWriter(string fileName, bool encode, bool clearBufferOnWrite)
         {
             this.encode = encode;
             this.clearBufferOnWrite = clearBufferOnWrite;
-
+            headerWritten = false;
             Initialize(fileName);
         }
 
         public void Initialize(string fileName)
         {
             outputFileName = fileName;
-            fileStream = new FileStream(outputFileName, FileMode.Create);
-            headerWritten = false;
+            outputStream = new FileStream(outputFileName, FileMode.Create);
         }
 
         public void RegisterVersion(uint majorVersion, uint minorVersion, uint revision)
@@ -78,7 +80,7 @@ namespace AYLib.GenericDataLogger
 
         private void CreateHeader(long timeStamp)
         {
-            dataBuffer.WriteDataBlock(Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, encode);
+            dataBuffer.WriteDataBlock(Common.Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, encode);
             dataBuffer.WriteDataBlock(
                 encode ?
                     MessagePackSerializer.Serialize(headerData, lz4Options) : 
@@ -108,7 +110,10 @@ namespace AYLib.GenericDataLogger
             lock (writerLock)
             {
                 if (!headerWritten)
+                {
                     CreateHeader(timeStamp);
+                    headerWritten = true;
+                }
 
                 try
                 {
@@ -133,7 +138,10 @@ namespace AYLib.GenericDataLogger
             lock (writerLock)
             {
                 if (!headerWritten)
+                {
                     CreateHeader(timeStamp);
+                    headerWritten = true;
+                }
 
                 if (partial)
                 {
@@ -210,9 +218,9 @@ namespace AYLib.GenericDataLogger
                     MessagePackSerializer.Serialize(dataType, data, MessagePack.Resolvers.ContractlessStandardResolver.Options);
         }
 
-        public void FlushToFile()
+        public void FlushToStream()
         {
-            dataBuffer.WriteTo(fileStream);
+            dataBuffer.WriteTo(outputStream);
         }
 
         #region IDisposable Support
@@ -224,7 +232,7 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    fileStream.Dispose();
+                    outputStream.Dispose();
                     dataBuffer.Dispose();
                 }
 

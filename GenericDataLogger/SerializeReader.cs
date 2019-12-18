@@ -19,7 +19,7 @@ namespace AYLib.GenericDataLogger
         private Guid signature;
         private Header headerData;
 
-        private Stream fileStream;
+        private Stream inputStream;
         private string inputFileName;
 
         private ReadDataBuffer dataBuffer = new ReadDataBuffer();
@@ -30,22 +30,27 @@ namespace AYLib.GenericDataLogger
 
         public Header HeaderData => headerData;
 
+        public SerializeReader(Stream inputStream, bool encoded)
+        {
+            this.encoded = encoded;
+            this.inputStream = inputStream;
+        }
+
         public SerializeReader(string fileName, bool encoded)
         {
             this.encoded = encoded;
-
             Initialize(fileName);
         }
 
         public void Initialize(string fileName)
         {
             inputFileName = fileName;
-            fileStream = new FileStream(inputFileName, FileMode.Open);
+            inputStream = new FileStream(inputFileName, FileMode.Open);
         }
 
-        public void ReadFromFile()
+        public void ReadFromStream()
         {
-            dataBuffer.ReadFrom(fileStream);
+            dataBuffer.ReadFrom(inputStream);
         }
 
         public void ReadHeader()
@@ -60,7 +65,7 @@ namespace AYLib.GenericDataLogger
             }
             else
             {
-                var fileReader = new BinaryReader(fileStream, System.Text.Encoding.Default, true);
+                var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
                 sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
                 header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp, fileReader);
                 fileReader.Dispose();
@@ -74,7 +79,7 @@ namespace AYLib.GenericDataLogger
 
         public void ReadData(long timeToReadTo = long.MaxValue)
         {
-            var fileReader = new BinaryReader(fileStream, System.Text.Encoding.Default, true);
+            var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
 
             bool doRead = true;
             while (doRead)
@@ -92,7 +97,7 @@ namespace AYLib.GenericDataLogger
                 }
                 else
                 {
-                    if (fileStream.Length == fileStream.Position)
+                    if (inputStream.Length == inputStream.Position)
                         break;
                     dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp, fileReader);
                 }
@@ -132,7 +137,7 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    fileStream.Dispose();
+                    inputStream.Dispose();
                     dataBuffer.Dispose();
                     onDataRead.Dispose();
                 }
