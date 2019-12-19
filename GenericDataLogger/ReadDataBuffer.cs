@@ -109,8 +109,8 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    binaryReader.Dispose();
-                    memoryStream.Dispose();
+                    binaryReader?.Dispose();
+                    memoryStream?.Dispose();
                 }
 
                 disposedValue = true;

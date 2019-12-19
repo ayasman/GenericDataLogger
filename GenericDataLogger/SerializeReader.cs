@@ -137,9 +137,9 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    inputStream.Dispose();
-                    dataBuffer.Dispose();
-                    onDataRead.Dispose();
+                    inputStream?.Dispose();
+                    dataBuffer?.Dispose();
+                    onDataRead?.Dispose();
                 }
 
                 disposedValue = true;

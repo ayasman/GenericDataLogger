@@ -220,6 +220,8 @@ namespace AYLib.GenericDataLogger
 
         public void FlushToStream()
         {
+            if (outputStream == null)
+                throw new Exception("Cannot write to output stream, no output stream configured.");
             dataBuffer.WriteTo(outputStream);
         }
 
@@ -232,8 +234,8 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    outputStream.Dispose();
-                    dataBuffer.Dispose();
+                    outputStream?.Dispose();
+                    dataBuffer?.Dispose();
                 }
 
                 disposedValue = true;

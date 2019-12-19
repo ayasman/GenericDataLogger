@@ -48,7 +48,8 @@ namespace BehaviourTreeTests
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.WriteBuffer(0);
-            writer.FlushToStream();
+
+            Assert.Throws<Exception>(() => writer.FlushToStream());
 
             writer.Dispose();
         }

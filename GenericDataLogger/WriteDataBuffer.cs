@@ -37,18 +37,11 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                //if (!isSignature)
-                //{
                 var metaBlock = encode ?
                                     MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType), lz4Options) :
                                     MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
                 binaryWriter.Write(metaBlock.Length);
                 binaryWriter.Write(metaBlock);
-                //}
-                //else
-                //{
-                //    binaryWriter.Write(data.Length);
-                //}
                 binaryWriter.Write(data);
             }
         }
@@ -72,8 +65,8 @@ namespace AYLib.GenericDataLogger
                 if (disposing)
                 {
                     // TODO: dispose managed state (managed objects).
-                    binaryWriter.Dispose();
-                    memoryStream.Dispose();
+                    binaryWriter?.Dispose();
+                    memoryStream?.Dispose();
                 }
 
                 disposedValue = true;
