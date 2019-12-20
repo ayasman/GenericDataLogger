@@ -64,7 +64,6 @@ namespace AYLib.GenericDataLogger
             {
                 if (disposing)
                 {
-                    // TODO: dispose managed state (managed objects).
                     binaryWriter?.Dispose();
                     memoryStream?.Dispose();
                 }

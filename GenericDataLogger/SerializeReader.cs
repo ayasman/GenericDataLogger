@@ -13,6 +13,7 @@ namespace AYLib.GenericDataLogger
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         private Subject<ReadSerializeData> onDataRead = new Subject<ReadSerializeData>();
+        private Subject<Exception> onReadError = new Subject<Exception>();
 
         private readonly bool encoded = false;
 
@@ -25,6 +26,7 @@ namespace AYLib.GenericDataLogger
         private ReadDataBuffer dataBuffer = new ReadDataBuffer();
 
         public IObservable<ReadSerializeData> WhenDataRead => onDataRead.Publish().RefCount();
+        public IObservable<Exception> OnReadException => onReadError.Publish().RefCount();
 
         public Guid Signature => signature;
 

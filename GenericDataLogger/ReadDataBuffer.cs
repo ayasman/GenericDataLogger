@@ -54,21 +54,28 @@ namespace AYLib.GenericDataLogger
             byte[] retBlock = null;
             lock (readerLock)
             {
-                BinaryReader localReader = overrideReader != null ? overrideReader : binaryReader;
+                try
+                {
+                    BinaryReader localReader = overrideReader != null ? overrideReader : binaryReader;
 
-                lastBlockStartPosition = localReader.BaseStream.Position;
+                    lastBlockStartPosition = localReader.BaseStream.Position;
 
-                int metaBlockSize = localReader.ReadInt32();
-                byte[] metaDataBytes = localReader.ReadBytes(metaBlockSize);
+                    int metaBlockSize = localReader.ReadInt32();
+                    byte[] metaDataBytes = localReader.ReadBytes(metaBlockSize);
 
-                var metaData = encoded ?
-                                MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes, lz4Options) :
-                                MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+                    var metaData = encoded ?
+                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes, lz4Options) :
+                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
 
-                retBlock = localReader.ReadBytes(metaData.BlockSize);
-                typeID = metaData.TypeID;
-                blockType = metaData.BlockType;
-                timeStamp = metaData.TimeStamp;
+                    retBlock = localReader.ReadBytes(metaData.BlockSize);
+                    typeID = metaData.TypeID;
+                    blockType = metaData.BlockType;
+                    timeStamp = metaData.TimeStamp;
+                }
+                catch(Exception ex)
+                {
+                    throw new Exception("Error reading data block information.", ex);
+                }
             }
             return retBlock;
         }

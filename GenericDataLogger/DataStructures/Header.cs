@@ -47,14 +47,18 @@ namespace AYLib.GenericDataLogger
 
             try
             {
-                foreach (var reg in TypeRegistrations)
+                if (TypeRegistrations != null)
                 {
-                    registrationIDs.Add(reg.Value.ClassType, reg.Key);
+                    foreach (var reg in TypeRegistrations)
+                    {
+                        registrationIDs.Add(reg.Value.ClassType, reg.Key);
+                    }
                 }
             }
             catch (Exception ex)
             {
-
+                registrationIDs.Clear();
+                throw ex;
             }
         }
 

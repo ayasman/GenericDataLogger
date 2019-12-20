@@ -3,6 +3,8 @@ using MessagePack.Resolvers;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Text;
 
 namespace AYLib.GenericDataLogger
@@ -24,10 +26,12 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class SerializeWriter : IDisposable
     {
-        
-
         private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
         private static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
+
+        private Subject<Exception> onReadError = new Subject<Exception>();
+
+        public IObservable<Exception> OnReadException => onReadError.Publish().RefCount();
 
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
@@ -128,7 +132,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-
+                    throw new Exception("Error writing to data buffer.", ex);
                 }
             }
         }
@@ -149,52 +153,58 @@ namespace AYLib.GenericDataLogger
                     {
                         try
                         {
-                            var data = updatedData[dataID];
-                            var dataType = data.GetType();
-                            var outputType = headerData.GetRegistrationOutput(dataType);
-
-                            if ((outputType & BlockDataTypes.Partial) == BlockDataTypes.Partial ||
-                                 outputType == BlockDataTypes.None)
+                            if (updatedData.ContainsKey(dataID))
                             {
-                                var typeID = headerData.GetRegistrationID(dataType);
-                                dataBuffer.WriteDataBlock(
-                                    Encode(typeID >= 0, dataType, data),
-                                    typeID,
-                                    (uint)BlockDataTypes.Partial,
-                                    timeStamp,
-                                    encode);
+                                var data = updatedData[dataID];
+                                var dataType = data.GetType();
+                                var outputType = headerData.GetRegistrationOutput(dataType);
+
+                                if ((outputType & BlockDataTypes.Partial) == BlockDataTypes.Partial ||
+                                     outputType == BlockDataTypes.None)
+                                {
+                                    var typeID = headerData.GetRegistrationID(dataType);
+                                    dataBuffer.WriteDataBlock(
+                                        Encode(typeID >= 0, dataType, data),
+                                        typeID,
+                                        (uint)BlockDataTypes.Partial,
+                                        timeStamp,
+                                        encode);
+                                }
                             }
                         }
                         catch (Exception ex)
                         {
-
+                            throw new Exception("Error writing to data buffer.", ex);
                         }
                     }
                 }
                 else
                 {
-                    foreach (var data in updatedData.Values)
+                    if (updatedData != null)
                     {
-                        try
+                        foreach (var data in updatedData.Values)
                         {
-                            var dataType = data.GetType();
-                            var outputType = headerData.GetRegistrationOutput(dataType);
-
-                            if ((outputType & BlockDataTypes.Full) == BlockDataTypes.Full ||
-                                 outputType == BlockDataTypes.None)
+                            try
                             {
-                                var typeID = headerData.GetRegistrationID(dataType);
-                                dataBuffer.WriteDataBlock(
-                                    Encode(typeID >= 0, dataType, data),
-                                    typeID,
-                                    (uint)BlockDataTypes.Full,
-                                    timeStamp,
-                                    encode);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
+                                var dataType = data.GetType();
+                                var outputType = headerData.GetRegistrationOutput(dataType);
 
+                                if ((outputType & BlockDataTypes.Full) == BlockDataTypes.Full ||
+                                     outputType == BlockDataTypes.None)
+                                {
+                                    var typeID = headerData.GetRegistrationID(dataType);
+                                    dataBuffer.WriteDataBlock(
+                                        Encode(typeID >= 0, dataType, data),
+                                        typeID,
+                                        (uint)BlockDataTypes.Full,
+                                        timeStamp,
+                                        encode);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new Exception("Error writing to data buffer.", ex);
+                            }
                         }
                     }
                 }
