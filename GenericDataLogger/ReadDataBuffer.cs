@@ -28,13 +28,20 @@ namespace AYLib.GenericDataLogger
         {
             lock (readerLock)
             {
-                if (binaryReader != null)
+                try
                 {
-                    binaryReader.Dispose();
-                }
+                    if (binaryReader != null)
+                    {
+                        binaryReader.Dispose();
+                    }
 
-                memoryStream = new MemoryStream();
-                binaryReader = new BinaryReader(memoryStream, System.Text.Encoding.Default, true);
+                    memoryStream = new MemoryStream();
+                    binaryReader = new BinaryReader(memoryStream, System.Text.Encoding.Default, true);
+                }
+                catch(Exception ex)
+                {
+                    throw new Exception("Error creating binary reader streams.", ex);
+                }
             }
         }
 
@@ -44,6 +51,8 @@ namespace AYLib.GenericDataLogger
             {
                 lock (readerLock)
                 {
+                    if (binaryReader == null)
+                        return true;
                     return binaryReader.BaseStream.Length == binaryReader.BaseStream.Position;
                 }
             }
@@ -57,6 +66,9 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     BinaryReader localReader = overrideReader != null ? overrideReader : binaryReader;
+
+                    if (localReader == null)
+                        throw new Exception("Binary reader not open.");
 
                     lastBlockStartPosition = localReader.BaseStream.Position;
 
@@ -84,10 +96,22 @@ namespace AYLib.GenericDataLogger
         {
             lock (readerLock)
             {
-                source.Position = 0;
-                source.CopyTo(memoryStream);
-                memoryStream.Position = 0;
-                bufferFilled = true;
+                try
+                {
+                    if (memoryStream == null)
+                        throw new Exception("Reader memory stream not open.");
+                    if (source == null)
+                        throw new Exception("Source stream not open.");
+
+                    source.Position = 0;
+                    source.CopyTo(memoryStream);
+                    memoryStream.Position = 0;
+                    bufferFilled = true;
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Error copying data to memory stream.", ex);
+                }
             }
         }
 
@@ -95,6 +119,9 @@ namespace AYLib.GenericDataLogger
         {
             lock (readerLock)
             {
+                if (memoryStream == null)
+                    throw new Exception("Reader memory stream not open.");
+
                 memoryStream.Position = lastBlockStartPosition;
             }
         }
@@ -103,9 +130,14 @@ namespace AYLib.GenericDataLogger
         {
             lock (readerLock)
             {
+                if (memoryStream == null)
+                    throw new Exception("Reader memory stream not open.");
+
                 memoryStream.Position = 0;
             }
         }
+
+        public bool IsStreamOpen => memoryStream != null && memoryStream.CanRead;
 
         #region IDisposable Support
         private bool disposedValue = false;
@@ -118,6 +150,9 @@ namespace AYLib.GenericDataLogger
                 {
                     binaryReader?.Dispose();
                     memoryStream?.Dispose();
+
+                    binaryReader = null;
+                    memoryStream = null;
                 }
 
                 disposedValue = true;

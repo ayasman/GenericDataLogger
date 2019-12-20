@@ -29,10 +29,6 @@ namespace AYLib.GenericDataLogger
         private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
         private static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
 
-        private Subject<Exception> onReadError = new Subject<Exception>();
-
-        public IObservable<Exception> OnReadException => onReadError.Publish().RefCount();
-
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
 
@@ -68,44 +64,45 @@ namespace AYLib.GenericDataLogger
 
         public void Initialize(string fileName)
         {
-            outputFileName = fileName;
-            outputStream = new FileStream(outputFileName, FileMode.Create);
+            try
+            {
+                outputFileName = fileName;
+                outputStream = new FileStream(outputFileName, FileMode.Create);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error initializing binary file stream.", ex);
+            }
         }
 
         public void RegisterVersion(uint majorVersion, uint minorVersion, uint revision)
         {
-            headerData.RegisterVersion(majorVersion, minorVersion, revision);
+            headerData?.RegisterVersion(majorVersion, minorVersion, revision);
         }
 
         public void RegisterType(Type newType, BlockDataTypes outputType)
         {
-            headerData.RegisterType(newType, outputType);
-        }
-
-        private void CreateHeader(long timeStamp)
-        {
-            dataBuffer.WriteDataBlock(Common.Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, encode);
-            dataBuffer.WriteDataBlock(
-                encode ?
-                    MessagePackSerializer.Serialize(headerData, lz4Options) : 
-                    MessagePackSerializer.Serialize(headerData),
-                -1,
-                (uint)BlockDataTypes.Header,
-                timeStamp,
-                encode);
+            headerData?.RegisterType(newType, outputType);
         }
 
         public void Update(ISerializeData data)
         {
             lock (writerLock)
             {
-                if (!updatedData.ContainsKey(data.SerializeDataID))
-                    updatedData.Add(data.SerializeDataID, data);
-                else
-                    updatedData[data.SerializeDataID] = data;
+                try
+                {
+                    if (!updatedData.ContainsKey(data.SerializeDataID))
+                        updatedData.Add(data.SerializeDataID, data);
+                    else
+                        updatedData[data.SerializeDataID] = data;
 
-                if (!recentUpdates.Contains(data.SerializeDataID))
-                    recentUpdates.Add(data.SerializeDataID);
+                    if (!recentUpdates.Contains(data.SerializeDataID))
+                        recentUpdates.Add(data.SerializeDataID);
+                }
+                catch(Exception ex)
+                {
+                    throw new Exception("Error updating data cache.", ex);
+                }
             }
         }
 
@@ -113,14 +110,17 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                if (!headerWritten)
-                {
-                    CreateHeader(timeStamp);
-                    headerWritten = true;
-                }
-
                 try
                 {
+                    if (dataBuffer == null)
+                        throw new Exception("Write buffer not open.");
+
+                    if (!headerWritten)
+                    {
+                        CreateHeader(timeStamp);
+                        headerWritten = true;
+                    }
+
                     var dataType = data.GetType();
                     var typeID = headerData.GetRegistrationID(dataType);
                     dataBuffer.WriteDataBlock(
@@ -141,17 +141,20 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                if (!headerWritten)
+                try
                 {
-                    CreateHeader(timeStamp);
-                    headerWritten = true;
-                }
+                    if (dataBuffer == null)
+                        throw new Exception("Write buffer not open.");
 
-                if (partial)
-                {
-                    foreach (var dataID in recentUpdates)
+                    if (!headerWritten)
                     {
-                        try
+                        CreateHeader(timeStamp);
+                        headerWritten = true;
+                    }
+
+                    if (partial)
+                    {
+                        foreach (var dataID in recentUpdates)
                         {
                             if (updatedData.ContainsKey(dataID))
                             {
@@ -172,19 +175,12 @@ namespace AYLib.GenericDataLogger
                                 }
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            throw new Exception("Error writing to data buffer.", ex);
-                        }
                     }
-                }
-                else
-                {
-                    if (updatedData != null)
+                    else
                     {
-                        foreach (var data in updatedData.Values)
+                        if (updatedData != null)
                         {
-                            try
+                            foreach (var data in updatedData.Values)
                             {
                                 var dataType = data.GetType();
                                 var outputType = headerData.GetRegistrationOutput(dataType);
@@ -201,19 +197,49 @@ namespace AYLib.GenericDataLogger
                                         encode);
                                 }
                             }
-                            catch (Exception ex)
-                            {
-                                throw new Exception("Error writing to data buffer.", ex);
-                            }
                         }
                     }
+
+                    recentUpdates.Clear();
+
+                    if (clearBufferOnWrite)
+                        updatedData.Clear();
                 }
-
-                recentUpdates.Clear();
-
-                if (clearBufferOnWrite)
-                    updatedData.Clear();
+                catch (Exception ex)
+                {
+                    throw new Exception("Error writing to data buffer.", ex);
+                }
             }
+        }
+
+        public void FlushToStream()
+        {
+            try
+            {
+                if (dataBuffer == null)
+                    throw new Exception("Write buffer not open.");
+                if (outputStream == null)
+                    throw new Exception("Cannot write to output stream, no output stream configured.");
+
+                dataBuffer.WriteTo(outputStream);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error writing to output stream.", ex);
+            }
+        }
+
+        private void CreateHeader(long timeStamp)
+        {
+            dataBuffer.WriteDataBlock(Common.Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, encode);
+            dataBuffer.WriteDataBlock(
+                encode ?
+                    MessagePackSerializer.Serialize(headerData, lz4Options) :
+                    MessagePackSerializer.Serialize(headerData),
+                -1,
+                (uint)BlockDataTypes.Header,
+                timeStamp,
+                encode);
         }
 
         private byte[] Encode(bool typed, Type dataType, ISerializeData data)
@@ -228,13 +254,6 @@ namespace AYLib.GenericDataLogger
                     MessagePackSerializer.Serialize(dataType, data, MessagePack.Resolvers.ContractlessStandardResolver.Options);
         }
 
-        public void FlushToStream()
-        {
-            if (outputStream == null)
-                throw new Exception("Cannot write to output stream, no output stream configured.");
-            dataBuffer.WriteTo(outputStream);
-        }
-
         #region IDisposable Support
         private bool disposedValue = false;
 
@@ -246,6 +265,9 @@ namespace AYLib.GenericDataLogger
                 {
                     outputStream?.Dispose();
                     dataBuffer?.Dispose();
+
+                    outputStream = null;
+                    dataBuffer = null;
                 }
 
                 disposedValue = true;

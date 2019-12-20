@@ -13,7 +13,6 @@ namespace AYLib.GenericDataLogger
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         private Subject<ReadSerializeData> onDataRead = new Subject<ReadSerializeData>();
-        private Subject<Exception> onReadError = new Subject<Exception>();
 
         private readonly bool encoded = false;
 
@@ -26,7 +25,6 @@ namespace AYLib.GenericDataLogger
         private ReadDataBuffer dataBuffer = new ReadDataBuffer();
 
         public IObservable<ReadSerializeData> WhenDataRead => onDataRead.Publish().RefCount();
-        public IObservable<Exception> OnReadException => onReadError.Publish().RefCount();
 
         public Guid Signature => signature;
 
@@ -46,88 +44,127 @@ namespace AYLib.GenericDataLogger
 
         public void Initialize(string fileName)
         {
-            inputFileName = fileName;
-            inputStream = new FileStream(inputFileName, FileMode.Open);
+            try
+            {
+                inputFileName = fileName;
+                inputStream = new FileStream(inputFileName, FileMode.Open);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error initializing binary file stream.", ex);
+            }
         }
 
         public void ReadFromStream()
         {
-            dataBuffer.ReadFrom(inputStream);
+            try
+            {
+                if (dataBuffer == null)
+                    throw new Exception("Read buffer not open.");
+                if (inputStream == null)
+                    throw new Exception("Cannot read from input stream, no input stream configured.");
+
+                dataBuffer.ReadFrom(inputStream);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error reading from input stream.", ex);
+            }
         }
 
         public void ReadHeader()
         {
-            byte[] sigData = null;
-            byte[] header = null;
-            if (dataBuffer.BufferFilled)
+            try
             {
-                dataBuffer.ResetToStart();
-                sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
-                header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
+                if (dataBuffer == null)
+                    throw new Exception("Read buffer not open.");
+
+                byte[] sigData = null;
+                byte[] header = null;
+                if (dataBuffer.BufferFilled)
+                {
+                    dataBuffer.ResetToStart();
+                    sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+                    header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
+                }
+                else
+                {
+                    var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
+                    sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
+                    header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp, fileReader);
+                    fileReader.Dispose();
+                }
+                signature = new Guid(sigData);
+                headerData = encoded ?
+                    MessagePackSerializer.Deserialize<Header>(header, lz4Options) :
+                    MessagePackSerializer.Deserialize<Header>(header, MessagePackSerializerOptions.Standard);
+                headerData.ResetRegistrationIDs();
             }
-            else
+            catch(Exception ex)
             {
-                var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
-                sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
-                header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp, fileReader);
-                fileReader.Dispose();
+                throw new Exception("Error reading header information.", ex);
             }
-            signature = new Guid(sigData);
-            headerData = encoded ?
-                MessagePackSerializer.Deserialize<Header>(header, lz4Options) :
-                MessagePackSerializer.Deserialize<Header>(header, MessagePackSerializerOptions.Standard);
-            headerData.ResetRegistrationIDs();
         }
 
         public void ReadData(long timeToReadTo = long.MaxValue)
         {
-            var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
-
-            bool doRead = true;
-            while (doRead)
+            try
             {
-                byte[] dataBlock = null;
-                int typeID = -1;
-                uint blockType;
-                long timeStamp;
+                if (dataBuffer == null)
+                    throw new Exception("Read buffer not open.");
 
-                if (dataBuffer.BufferFilled)
+                var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
+
+                bool doRead = true;
+                while (doRead)
                 {
-                    if (dataBuffer.IsEndOfStream)
+                    byte[] dataBlock = null;
+                    int typeID = -1;
+                    uint blockType;
+                    long timeStamp;
+
+                    if (dataBuffer.BufferFilled)
+                    {
+                        if (dataBuffer.IsEndOfStream)
+                            break;
+                        dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp);
+                    }
+                    else
+                    {
+                        if (inputStream.Length == inputStream.Position)
+                            break;
+                        dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp, fileReader);
+                    }
+
+                    if (timeToReadTo != long.MaxValue && timeToReadTo >= timeStamp)
+                    {
+                        dataBuffer.RewindOneBlock();
                         break;
-                    dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp);
-                }
-                else
-                {
-                    if (inputStream.Length == inputStream.Position)
-                        break;
-                    dataBlock = dataBuffer.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp, fileReader);
+                    }
+
+                    var dataType = headerData.GetRegistrationType(typeID);
+                    if (dataType != null)
+                    {
+                        var deserializedData = encoded ?
+                                                    MessagePackSerializer.Deserialize(dataType, dataBlock, lz4Options) :
+                                                    MessagePackSerializer.Deserialize(dataType, dataBlock);
+                        onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
+                    }
+                    else
+                    {
+                        var deserializedData = encoded ?
+                                                    MessagePackSerializer.Typeless.Deserialize(dataBlock, lz4Options) :
+                                                    MessagePackSerializer.Typeless.Deserialize(dataBlock);
+                        onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
+                    }
                 }
 
-                if (timeToReadTo != long.MaxValue && timeToReadTo >= timeStamp)
-                {
-                    dataBuffer.RewindOneBlock();
-                    break;
-                }
-
-                var dataType = headerData.GetRegistrationType(typeID);
-                if (dataType != null)
-                {
-                    var deserializedData = encoded ?
-                                                MessagePackSerializer.Deserialize(dataType, dataBlock, lz4Options) :
-                                                MessagePackSerializer.Deserialize(dataType, dataBlock);
-                    onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
-                }
-                else
-                {
-                    var deserializedData = encoded ?
-                                                MessagePackSerializer.Typeless.Deserialize(dataBlock, lz4Options) :
-                                                MessagePackSerializer.Typeless.Deserialize(dataBlock);
-                    onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
-                }
+                fileReader.Dispose();
             }
-
-            fileReader.Dispose();
+            catch (Exception ex)
+            {
+                throw new Exception("Error reading buffer information.", ex);
+            }
         }
 
         #region IDisposable Support
@@ -142,6 +179,10 @@ namespace AYLib.GenericDataLogger
                     inputStream?.Dispose();
                     dataBuffer?.Dispose();
                     onDataRead?.Dispose();
+
+                    inputStream = null;
+                    dataBuffer = null;
+                    onDataRead = null;
                 }
 
                 disposedValue = true;

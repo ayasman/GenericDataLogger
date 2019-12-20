@@ -23,13 +23,20 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                if (binaryWriter != null)
+                try
                 {
-                    binaryWriter.Dispose();
-                }
+                    if (binaryWriter != null)
+                    {
+                        binaryWriter.Dispose();
+                    }
 
-                memoryStream = new MemoryStream();
-                binaryWriter = new BinaryWriter(memoryStream, System.Text.Encoding.Default, true);
+                    memoryStream = new MemoryStream();
+                    binaryWriter = new BinaryWriter(memoryStream, System.Text.Encoding.Default, true);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Error creating binary writing streams.", ex);
+                }
             }
         }
 
@@ -37,12 +44,22 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                var metaBlock = encode ?
-                                    MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType), lz4Options) :
-                                    MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
-                binaryWriter.Write(metaBlock.Length);
-                binaryWriter.Write(metaBlock);
-                binaryWriter.Write(data);
+                try
+                {
+                    if (binaryWriter == null)
+                        throw new Exception("Binary writer not open.");
+
+                    var metaBlock = encode ?
+                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType), lz4Options) :
+                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+                    binaryWriter.Write(metaBlock.Length);
+                    binaryWriter.Write(metaBlock);
+                    binaryWriter.Write(data);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Error writing data block.", ex);
+                }
             }
         }
 
@@ -50,10 +67,24 @@ namespace AYLib.GenericDataLogger
         {
             lock (writerLock)
             {
-                memoryStream.WriteTo(target);
-                InitStreams();
+                try
+                {
+                    if (memoryStream == null)
+                        throw new Exception("Writer memory stream not open.");
+                    if (target == null)
+                        throw new Exception("Target stream not open.");
+
+                    memoryStream.WriteTo(target);
+                    InitStreams();
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Error writing to target stream.", ex);
+                }
             }
         }
+
+        public bool IsStreamOpen => memoryStream != null && memoryStream.CanWrite;
 
         #region IDisposable Support
         private bool disposedValue = false;
@@ -66,6 +97,9 @@ namespace AYLib.GenericDataLogger
                 {
                     binaryWriter?.Dispose();
                     memoryStream?.Dispose();
+
+                    binaryWriter = null;
+                    memoryStream = null;
                 }
 
                 disposedValue = true;

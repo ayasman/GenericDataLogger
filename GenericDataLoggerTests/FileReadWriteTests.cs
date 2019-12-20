@@ -8,21 +8,13 @@ using Xunit;
 
 namespace GenericDataLoggerTests
 {
-    /// <summary>
-    /// To Test:
-    /// File Create
-    /// No Stream to write to
-    /// Stream written to
-    /// Invalid types
-    /// Invalid data
-    /// </summary>
-    public class GenericDataLoggerTests
+    public class FileReadWriteTests
     {
         private string testOutputFile = @"TestReplayOutput.rpy";
         private Fixture fixture = new Fixture();
         private List<TestData> initialTestData;
 
-        public GenericDataLoggerTests()
+        public FileReadWriteTests()
         {
             initialTestData = new List<TestData>();
 
@@ -32,7 +24,7 @@ namespace GenericDataLoggerTests
             }
         }
     
-        //[Fact]
+        [Fact]
         public void TestWritingReadingFileEncoded()
         {
             SerializeWriter writer = new SerializeWriter(testOutputFile, true, false);
@@ -45,7 +37,6 @@ namespace GenericDataLoggerTests
             writer.WriteBuffer(0);
             writer.FlushToStream();
             writer.Dispose();
-
 
             var readTestData = new List<TestData>();
 
@@ -68,59 +59,6 @@ namespace GenericDataLoggerTests
             Assert.Equal(writer.HeaderData.MajorVersion, reader.HeaderData.MajorVersion);
             Assert.Equal(writer.HeaderData.MinorVersion, reader.HeaderData.MinorVersion);
             Assert.Equal(writer.HeaderData.Revision, reader.HeaderData.Revision);
-        }
-
-        //[Fact]
-        public void TestSuccess()
-        {
-            //ReplayReader reader = new ReplayReader(@"TestReplayOutput.rpy", true);
-            ////reader.ReadFromFile();
-            //reader.ReadHeader();
-            //reader.ReadFromFile();
-            //reader.ReadHeader();
-
-
-            //TestData data = new TestData();
-
-            //ReplayWriter writer = new ReplayWriter(@"TestReplayOutput.rpy", true, false);
-            //writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
-
-            //writer.Update(data);
-
-            //writer.WriteBuffer(0);
-
-            //writer.FlushToFile();
-
-            //writer.Dispose();
-
-
-
-
-
-
-
-
-
-            //DataLoggerWriter writer = new DataLoggerWriter();
-            //writer.RegisterType(typeof(TestData));
-
-            //writer.CreateHeader();
-
-            //writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
-            //writer.FlushBuffer();
-
-            ////var mem = new MemoryStream();
-            //var mem = new FileStream(@"OutputTest.bin", FileMode.Create);
-
-            //writer.WriteTo(mem);
-
-            //writer.WriteData(MessagePackSerializer.Serialize(new TestData()));
-
-            //writer.FlushBuffer();
-
-            //writer.WriteTo(mem);
-
-            //mem.Dispose();
         }
     }
 }

@@ -64,6 +64,18 @@ namespace GenericDataLoggerTests
         }
 
         [Fact]
+        public void TestBadMemoryStreams()
+        {
+            MemoryStream ms = new MemoryStream();
+            WriteDataBuffer sut = new WriteDataBuffer();
+            sut.Dispose();
+
+            Assert.False(sut.IsStreamOpen);
+            Assert.Throws<Exception>(() => sut.WriteTo(ms));
+            Assert.Throws<Exception>(() => sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, false));
+        }
+
+        [Fact]
         public void TestWritingHeader()
         {
             MemoryStream ms = new MemoryStream();
@@ -131,6 +143,18 @@ namespace GenericDataLoggerTests
             Assert.NotEqual(initialLength, secondLength);
             Assert.NotEqual(secondLength, lastLength);
             Assert.NotEqual(secondLength - initialLength, lastLength - secondLength);
+        }
+
+        [Fact]
+        public void TestBadWriter()
+        {
+            MemoryStream ms = new MemoryStream();
+            SerializeWriter sut = new SerializeWriter(ms, false, false);
+            sut.Dispose();
+
+            Assert.Throws<Exception>(() => sut.FlushToStream());
+            Assert.Throws<Exception>(() => sut.WriteBuffer(0));
+            Assert.Throws<Exception>(() => sut.Write(0, fixture.Create<TestData>()));
         }
     }
 }
