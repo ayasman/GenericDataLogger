@@ -5,6 +5,9 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Definition of the type registraion information, for serialization to file.
+    /// </summary>
     [MessagePackObject]
     public class TypeRegistration
     {

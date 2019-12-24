@@ -80,7 +80,7 @@ namespace GenericDataLoggerTests
         {
             MemoryStream ms = new MemoryStream();
 
-            SerializeWriter writer = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.WriteBuffer(0);
@@ -101,7 +101,7 @@ namespace GenericDataLoggerTests
         public void TestNoStream()
         {
             Stream ms = null;
-            SerializeWriter writer = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.WriteBuffer(0);
@@ -115,7 +115,7 @@ namespace GenericDataLoggerTests
         public void TestWritePartialFull()
         {
             MemoryStream ms = new MemoryStream();
-            SerializeWriter writer = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full);
             writer.RegisterType(typeof(TestDataSmall), BlockDataTypes.Partial);
             writer.WriteBuffer(0);
@@ -149,7 +149,7 @@ namespace GenericDataLoggerTests
         public void TestBadWriter()
         {
             MemoryStream ms = new MemoryStream();
-            SerializeWriter sut = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter sut = new CachedSerializeWriter(ms, false, false);
             sut.Dispose();
 
             Assert.Throws<Exception>(() => sut.FlushToStream());

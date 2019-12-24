@@ -4,6 +4,9 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Object to hold data about read data blocks.
+    /// </summary>
     public class ReadSerializeData
     {
         public long Timestamp { get; private set; }

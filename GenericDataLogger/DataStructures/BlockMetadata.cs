@@ -5,6 +5,10 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// The definition of the meta information block that identifies the written data and its type.
+    /// The block size identifies the size of the data to read.
+    /// </summary>
     [MessagePackObject]
     public class BlockMetadata
     {

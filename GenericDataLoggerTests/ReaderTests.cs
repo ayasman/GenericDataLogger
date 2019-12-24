@@ -21,7 +21,7 @@ namespace GenericDataLoggerTests
         public void TestSerializeBufferInit()
         {
             ReadDataBuffer sut = new ReadDataBuffer();
-           
+
             Assert.True(sut.IsEndOfStream);
 
             sut.Dispose();
@@ -85,7 +85,7 @@ namespace GenericDataLoggerTests
         public void TestNoStream()
         {
             Stream ms = null;
-            SerializeReader sut = new SerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
 
             Assert.Throws<Exception>(() => sut.ReadHeader());
             Assert.Throws<Exception>(() => sut.ReadData());
@@ -97,7 +97,7 @@ namespace GenericDataLoggerTests
         public void TestBadBuffer()
         {
             MemoryStream ms = new MemoryStream();
-            SerializeReader sut = new SerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
             sut.Dispose();
 
             Assert.Throws<Exception>(() => sut.ReadHeader());
@@ -113,7 +113,7 @@ namespace GenericDataLoggerTests
             uint rev = fixture.Create<uint>();
 
             MemoryStream ms = new MemoryStream();
-            SerializeWriter writer = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(major, minor, rev);
             writer.WriteBuffer(0);
@@ -121,7 +121,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            SerializeReader sut = new SerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
             sut.ReadHeader();
             sut.Dispose();
             writer.Dispose();
@@ -137,7 +137,7 @@ namespace GenericDataLoggerTests
         {
             var testData = fixture.Create<TestData>();
             MemoryStream ms = new MemoryStream();
-            SerializeWriter writer = new SerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
             writer.Update(testData);
@@ -146,7 +146,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            SerializeReader sut = new SerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
 
             sut.WhenDataRead.Subscribe(data =>
             {
@@ -156,6 +156,33 @@ namespace GenericDataLoggerTests
 
             sut.ReadHeader();
             sut.ReadData();
+            sut.Dispose();
+            writer.Dispose();
+        }
+
+
+        [Fact]
+        public void TestReadSingleDataBlock()
+        {
+            var testData = fixture.Create<TestData>();
+            MemoryStream ms = new MemoryStream();
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
+            writer.Write(0, testData);
+            writer.FlushToStream();
+
+            ms.Position = 0;
+
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+
+            sut.WhenDataRead.Subscribe(data =>
+            {
+                var readData = data.DataBlock as TestData;
+                Assert.Equal(testData, readData, new TestDataEqualityComparer());
+            });
+
+            sut.ReadHeader();
+            sut.ReadNextData(typeof(TestData));
             sut.Dispose();
             writer.Dispose();
         }

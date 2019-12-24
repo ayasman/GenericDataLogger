@@ -5,6 +5,10 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// The definition of the header block that identifies the version of the output,
+    /// and the type registrations of the data being written to the file.
+    /// </summary>
     [MessagePackObject]
     public class Header
     {
@@ -27,6 +31,27 @@ namespace AYLib.GenericDataLogger
 
         }
 
+        /// <summary>
+        /// Verifies that the given version information matches or is able to be used
+        /// with the read file header.
+        /// </summary>
+        /// <param name="major"></param>
+        /// <param name="minor"></param>
+        /// <param name="revision"></param>
+        /// <returns></returns>
+        public bool Verify(uint major, uint minor, uint revision)
+        {
+            if (MajorVersion == 0 && MinorVersion == 0 && Revision == 0)
+                return true;
+
+            if (major >= MajorVersion &&
+                minor >= MinorVersion &&
+                revision >= Revision)
+                return true;
+
+            return false;
+        }
+
         public void RegisterVersion(uint majorVersion, uint minorVersion, uint revision)
         {
             MajorVersion = majorVersion;
@@ -34,6 +59,12 @@ namespace AYLib.GenericDataLogger
             Revision = revision;
         }
 
+        /// <summary>
+        /// Registers a data type as being serialized/deserialized. The block type identifies if the type
+        /// is valid for write during a partial write, full write, or both.
+        /// </summary>
+        /// <param name="newType"></param>
+        /// <param name="outputType"></param>
         public void RegisterType(Type newType, BlockDataTypes outputType)
         {
             int id = TypeRegistrations.Count;

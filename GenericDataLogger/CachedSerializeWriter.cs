@@ -24,7 +24,7 @@ namespace AYLib.GenericDataLogger
     /// https://github.com/neuecc/MessagePack-CSharp/blob/1ff44c22065df8dac6fe73aa88510570611c142e/doc/migration.md
     /// 
     /// </summary>
-    public class SerializeWriter : IDisposable
+    public class CachedSerializeWriter : IDisposable
     {
         private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
         private static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
@@ -46,7 +46,7 @@ namespace AYLib.GenericDataLogger
 
         public Header HeaderData => headerData;
 
-        public SerializeWriter(Stream outputStream, bool encode, bool clearBufferOnWrite)
+        public CachedSerializeWriter(Stream outputStream, bool encode, bool clearBufferOnWrite)
         {
             this.encode = encode;
             this.clearBufferOnWrite = clearBufferOnWrite;
@@ -54,7 +54,7 @@ namespace AYLib.GenericDataLogger
             headerWritten = false;
         }
 
-        public SerializeWriter(string fileName, bool encode, bool clearBufferOnWrite)
+        public CachedSerializeWriter(string fileName, bool encode, bool clearBufferOnWrite)
         {
             this.encode = encode;
             this.clearBufferOnWrite = clearBufferOnWrite;

@@ -27,7 +27,7 @@ namespace GenericDataLoggerTests
         [Fact]
         public void TestWritingReadingFileEncoded()
         {
-            SerializeWriter writer = new SerializeWriter(testOutputFile, true, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(testOutputFile, true, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
 
@@ -40,7 +40,7 @@ namespace GenericDataLoggerTests
 
             var readTestData = new List<TestData>();
 
-            SerializeReader reader = new SerializeReader(testOutputFile, true);
+            CachedSerializeReader reader = new CachedSerializeReader(testOutputFile, true);
 
             reader.WhenDataRead.Subscribe(data =>
             {

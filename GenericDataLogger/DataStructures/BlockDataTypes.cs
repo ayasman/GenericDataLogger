@@ -4,6 +4,10 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Primary types of data blocks available for writing.
+    /// External applications should really only use the Full and Partial types.
+    /// </summary>
     [Flags]
     public enum BlockDataTypes : byte
     {
