@@ -186,5 +186,11 @@ namespace GenericDataLoggerTests
             sut.Dispose();
             writer.Dispose();
         }
+
+        [Fact]
+        public void TestReadReentrancy()
+        {
+
+        }
     }
 }

@@ -28,7 +28,7 @@ namespace AYLib.GenericDataLogger
             headerData?.RegisterType(newType, (uint)BlockDataTypes.None);
         }
 
-        public void Write(Stream outputStream, ISerializeData data)
+        public void Write(Stream outputStream, ISerializeData data, long timeStamp = 0)
         {
             lock (writerLock)
             {
@@ -42,8 +42,8 @@ namespace AYLib.GenericDataLogger
                     var dataBytes = Encode(encode, dataType, data);
 
                     var metaBlock = encode ?
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, 0, dataBytes.Length, (uint)BlockDataTypes.None), lz4Options) :
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, 0, dataBytes.Length, (uint)BlockDataTypes.None));
+                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, dataBytes.Length, (uint)BlockDataTypes.None), lz4Options) :
+                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, dataBytes.Length, (uint)BlockDataTypes.None));
 
                     using (var binaryWriter = new BinaryWriter(outputStream, System.Text.Encoding.Default, true))
                     {

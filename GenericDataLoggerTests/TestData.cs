@@ -47,6 +47,19 @@ namespace GenericDataLoggerTests
         }
     }
 
+
+    public class UnmarkedTestData : ISerializeData
+    {
+        public Guid SerializeDataID { get; set; }
+
+        public int TestInt { get; set; }
+
+        public UnmarkedTestData()
+        {
+
+        }
+    }
+
     internal class TestDataEqualityComparer : IEqualityComparer<TestData>
     {
         public bool Equals(TestData x, TestData y)

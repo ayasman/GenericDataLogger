@@ -1,6 +1,7 @@
 ﻿using MessagePack;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 
 namespace AYLib.GenericDataLogger
@@ -67,6 +68,9 @@ namespace AYLib.GenericDataLogger
         /// <param name="outputType"></param>
         public void RegisterType(Type newType, BlockDataTypes outputType)
         {
+            if (newType.GetCustomAttribute<MessagePackObjectAttribute>(true) == null)
+                throw new Exception("Object being registered is not marked for serialization.");
+
             int id = TypeRegistrations.Count;
             TypeRegistrations.Add(id, new TypeRegistration(id, newType, outputType));
             registrationIDs.Add(newType, id);

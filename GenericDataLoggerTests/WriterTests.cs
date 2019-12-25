@@ -156,5 +156,16 @@ namespace GenericDataLoggerTests
             Assert.Throws<Exception>(() => sut.WriteBuffer(0));
             Assert.Throws<Exception>(() => sut.Write(0, fixture.Create<TestData>()));
         }
+
+        [Fact]
+        public void TestRegisterUnmarkedClass()
+        {
+            MemoryStream ms = new MemoryStream();
+            CachedSerializeWriter sut = new CachedSerializeWriter(ms, false, false);
+
+            Assert.Throws<Exception>(() => sut.RegisterType(typeof(UnmarkedTestData), BlockDataTypes.Full | BlockDataTypes.Partial));
+
+            sut.Dispose();
+        }
     }
 }

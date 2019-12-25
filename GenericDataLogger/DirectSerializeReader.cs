@@ -27,11 +27,12 @@ namespace AYLib.GenericDataLogger
             headerData?.RegisterType(newType, (uint)BlockDataTypes.None);
         }
 
-        public object Read(Stream inputStream)
+        public ReadSerializeData Read(Stream inputStream)
         {
             try
             {
                 int typeID = -1;
+                long timeStamp = 0;
 
                 using (var binaryReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true))
                 {
@@ -43,6 +44,7 @@ namespace AYLib.GenericDataLogger
                                     MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
 
                     typeID = metaData.TypeID;
+                    timeStamp = metaData.TimeStamp;
 
                     var dataType = headerData.GetRegistrationType(typeID);
                     if (dataType != null)
@@ -52,7 +54,8 @@ namespace AYLib.GenericDataLogger
                         var deserializedData = encoded ?
                                                     MessagePackSerializer.Deserialize(dataType, dataBlock, lz4Options) :
                                                     MessagePackSerializer.Deserialize(dataType, dataBlock);
-                        return deserializedData;
+
+                        return new ReadSerializeData(timeStamp, deserializedData, BlockDataTypes.None);
                     }
                     else
                         throw new Exception("Type not registered.");

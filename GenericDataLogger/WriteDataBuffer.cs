@@ -48,7 +48,7 @@ namespace AYLib.GenericDataLogger
                 {
                     if (binaryWriter == null)
                         throw new Exception("Binary writer not open.");
-
+                    
                     var metaBlock = encode ?
                                         MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType), lz4Options) :
                                         MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));

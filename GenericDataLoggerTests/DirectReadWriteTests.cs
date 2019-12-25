@@ -49,7 +49,9 @@ namespace GenericDataLoggerTests
             writerSut.RegisterType(typeof(TestData));
             writerSut.RegisterType(typeof(TestDataSmall));
 
-            writerSut.Write(msLarge, fixture.Create<TestData>());
+            TestData testData = fixture.Create<TestData>();
+
+            writerSut.Write(msLarge, testData);
             writerSut.Write(msSmall, fixture.Create<TestDataSmall>());
 
             msSmall.Position = 0;
@@ -62,6 +64,9 @@ namespace GenericDataLoggerTests
 
             Assert.Throws<Exception>(() => sut.Read(null));
             Assert.Throws<Exception>(() => sut.Read(msSmall));
+
+            Assert.IsType<ReadSerializeData>(retData);
+            Assert.Equal(testData, retData.DataBlock as TestData, new TestDataEqualityComparer());
 
             sut.Dispose();
             writerSut.Dispose();
