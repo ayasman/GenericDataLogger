@@ -133,6 +133,33 @@ namespace GenericDataLoggerTests
         }
 
         [Fact]
+        public void TestReadHeaderEncoded()
+        {
+            uint major = fixture.Create<uint>();
+            uint minor = fixture.Create<uint>();
+            uint rev = fixture.Create<uint>();
+
+            MemoryStream ms = new MemoryStream();
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, true, false);
+            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
+            writer.RegisterVersion(major, minor, rev);
+            writer.WriteBuffer(0);
+            writer.FlushToStream();
+
+            ms.Position = 0;
+
+            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            sut.ReadHeader();
+            sut.Dispose();
+            writer.Dispose();
+
+            Assert.Equal(Common.Signature, sut.Signature);
+            Assert.Equal(major, sut.HeaderData.MajorVersion);
+            Assert.Equal(minor, sut.HeaderData.MinorVersion);
+            Assert.Equal(rev, sut.HeaderData.Revision);
+        }
+
+        [Fact]
         public void TestReadDataBlock()
         {
             var testData = fixture.Create<TestData>();

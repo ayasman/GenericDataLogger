@@ -6,6 +6,9 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Helper class that wraps around a memory stream to read binary data.
+    /// </summary>
     public class ReadDataBuffer : IDisposable
     {
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
@@ -17,13 +20,22 @@ namespace AYLib.GenericDataLogger
 
         private long lastBlockStartPosition = 0;
 
+        /// <summary>
+        /// True if the memory stream buffer has been written to.
+        /// </summary>
         public bool BufferFilled => bufferFilled;
 
+        /// <summary>
+        /// Constructor. Initializes the internal memory stream and binary reader for it.
+        /// </summary>
         public ReadDataBuffer()
         {
             InitStreams();
         }
 
+        /// <summary>
+        /// Initializes the memory streams and reader.
+        /// </summary>
         private void InitStreams()
         {
             lock (readerLock)
@@ -45,6 +57,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// True if the reader cannot be read, or is at the end of a read.
+        /// </summary>
         public bool IsEndOfStream
         {
             get
@@ -58,6 +73,15 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads the next data block in the data stream and outputs the resulting data.
+        /// </summary>
+        /// <param name="encoded">If the data block is expected to be encoded</param>
+        /// <param name="typeID">The registered type ID for the data block</param>
+        /// <param name="blockType">The block type for the data block</param>
+        /// <param name="timeStamp">Timestemp of the data block</param>
+        /// <param name="overrideReader">A stream to read from, if not using the built-in memory stream</param>
+        /// <returns></returns>
         public byte[] ReadDataBlock(bool encoded, out int typeID, out uint blockType, out long timeStamp, BinaryReader overrideReader = null)
         {
             byte[] retBlock = null;
@@ -92,6 +116,10 @@ namespace AYLib.GenericDataLogger
             return retBlock;
         }
 
+        /// <summary>
+        /// Copies data from the source stream into the backing memory stream for reading.
+        /// </summary>
+        /// <param name="source"></param>
         public void ReadFrom(Stream source)
         {
             lock (readerLock)
@@ -115,6 +143,10 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Rewinds the position of the memory stream back one data block, to be able to read it again.
+        /// Useful when processing to a timestamp, and wanting to rewind when found.
+        /// </summary>
         public void RewindOneBlock()
         {
             lock (readerLock)
@@ -126,6 +158,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Resets the position of the memory stream to the start.
+        /// </summary>
         public void ResetToStart()
         {
             lock (readerLock)
@@ -137,6 +172,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// True if the backing stream is created and can be read from.
+        /// </summary>
         public bool IsStreamOpen => memoryStream != null && memoryStream.CanRead;
 
         #region IDisposable Support

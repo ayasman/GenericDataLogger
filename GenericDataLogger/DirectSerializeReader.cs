@@ -8,6 +8,15 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Class to handle the reading of data from a binary stream, without the use of a data cache, but with the same header/data format.
+    /// 
+    /// This is intended to be used for receiving data chunks from the same version of writer, and doesn't include header information as part
+    /// of the deserialization process (since there is no guarantee that the header will be written in all cases).
+    /// 
+    /// Thus, this is useful for serializing data for network data exchanges, where two clients have the same data types registered in
+    /// the same order.
+    /// </summary>
     public class DirectSerializeReader : IDisposable
     {
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
@@ -17,16 +26,28 @@ namespace AYLib.GenericDataLogger
 
         private readonly bool encoded = false;
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="encode">If the data is being LZ4 encoded</param>
         public DirectSerializeReader(bool encoded)
         {
             this.encoded = encoded;
         }
 
+        /// <summary>
+        /// Registers a new data type with the system.
+        /// </summary>
         public void RegisterType(Type newType)
         {
             headerData?.RegisterType(newType, (uint)BlockDataTypes.None);
         }
 
+        /// <summary>
+        /// Read the next data block from a stream.
+        /// </summary>
+        /// <param name="inputStream">The stream to read from</param>
+        /// <returns>Object with the deserialized data and some header information</returns>
         public ReadSerializeData Read(Stream inputStream)
         {
             try

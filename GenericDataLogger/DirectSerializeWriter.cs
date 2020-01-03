@@ -9,6 +9,15 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Class to handle the writing of data to a binary stream, without the use of a data cache, but with the same header/data format.
+    /// 
+    /// This is intended to be used for sending data chunks to the same version of reader, and doesn't include header information as part
+    /// of the serialization process (since there is no guarantee that the header will be written in all cases).
+    /// 
+    /// Thus, this is useful for serializing data for network data exchanges, where two clients have the same data types registered in
+    /// the same order.
+    /// </summary>
     public class DirectSerializeWriter : IDisposable
     {
         private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
@@ -18,16 +27,30 @@ namespace AYLib.GenericDataLogger
 
         private readonly bool encode = false;
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="encode">If the data is being LZ4 encoded</param>
         public DirectSerializeWriter(bool encode)
         {
             this.encode = encode;
         }
 
+        /// <summary>
+        /// Registers a new data type with the system.
+        /// </summary>
+        /// <param name="newType"></param>
         public void RegisterType(Type newType)
         {
             headerData?.RegisterType(newType, (uint)BlockDataTypes.None);
         }
 
+        /// <summary>
+        /// Writes the header/data to the stream as binary data.
+        /// </summary>
+        /// <param name="outputStream">The stream to write to</param>
+        /// <param name="data">The data object to write</param>
+        /// <param name="timeStamp">The timestamp to write as, if applicable</param>
         public void Write(Stream outputStream, ISerializeData data, long timeStamp = 0)
         {
             lock (writerLock)
@@ -59,6 +82,13 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Serialize the data type using MessagePack.
+        /// </summary>
+        /// <param name="encode">If the data is to be LZ4 encoded</param>
+        /// <param name="dataType">The data type of the object</param>
+        /// <param name="data">The object to encode</param>
+        /// <returns></returns>
         private byte[] Encode(bool encode, Type dataType, ISerializeData data)
         {
             return

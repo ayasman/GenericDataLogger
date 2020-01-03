@@ -8,13 +8,21 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Class to handle the reading of cached writer output.
+    /// 
+    /// Data is pushed into the read buffer, then is read block by block until the end of the file
+    /// or until a timestamp is reached.
+    /// 
+    /// Data block information is pushed to subscribed objects using the WhenDataRead observable.
+    /// </summary>
     public class CachedSerializeReader : IDisposable
     {
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         private Subject<ReadSerializeData> onDataRead = new Subject<ReadSerializeData>();
 
-        private readonly bool encoded = false;
+        private bool encoded = false;
 
         private Guid signature;
         private Header headerData;
@@ -24,29 +32,52 @@ namespace AYLib.GenericDataLogger
 
         private ReadDataBuffer dataBuffer = new ReadDataBuffer();
 
+        /// <summary>
+        /// Observable that notifies when data is read from the binary stream.
+        /// </summary>
         public IObservable<ReadSerializeData> WhenDataRead => onDataRead.Publish().RefCount();
 
+        /// <summary>
+        /// Signature of the read binary stream.
+        /// </summary>
         public Guid Signature => signature;
 
+        /// <summary>
+        /// Header data for the read binary stream.
+        /// </summary>
         public Header HeaderData => headerData;
 
-        public CachedSerializeReader(Stream inputStream, bool encoded)
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="inputStream">The stream to read from to fill the buffer on a ReadFromStream call</param>
+        public CachedSerializeReader(Stream inputStream)
         {
-            this.encoded = encoded;
             this.inputStream = inputStream;
         }
 
-        public CachedSerializeReader(string fileName, bool encoded)
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="fileName">The name/location of the file to read from on a ReadFromStream call</param>
+        public CachedSerializeReader(string fileName)
         {
-            this.encoded = encoded;
             Initialize(fileName);
         }
 
+        /// <summary>
+        /// Sets the header data for the reader.
+        /// </summary>
+        /// <param name="newHeader">New header object</param>
         public void SetHeader(Header newHeader)
         {
             headerData = newHeader;
         }
 
+        /// <summary>
+        /// Initializes an input file for the ReadFromStream call.
+        /// </summary>
+        /// <param name="fileName">The name/location of the file to read from</param>
         public void Initialize(string fileName)
         {
             try
@@ -60,6 +91,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads the data from the input stream (file or otherwise) to the data buffer.
+        /// </summary>
         public void ReadFromStream()
         {
             try
@@ -77,6 +111,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads the header object from the data buffer.
+        /// </summary>
         public void ReadHeader()
         {
             try
@@ -86,16 +123,25 @@ namespace AYLib.GenericDataLogger
 
                 byte[] sigData = null;
                 byte[] header = null;
+                byte[] wasEncoded = null;
                 if (dataBuffer.BufferFilled)
                 {
                     dataBuffer.ResetToStart();
-                    sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+                    sigData = dataBuffer.ReadDataBlock(false, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp);
+                    wasEncoded = dataBuffer.ReadDataBlock(false, out int encTypeID, out uint encBlockType, out long encTimeStamp);
+
+                    encoded = BitConverter.ToBoolean(wasEncoded, 0);
+
                     header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
                 }
                 else
                 {
                     var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
-                    sigData = dataBuffer.ReadDataBlock(encoded, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
+                    sigData = dataBuffer.ReadDataBlock(false, out int sigTypeID, out uint sigBlockType, out long sigTimeStamp, fileReader);
+                    wasEncoded = dataBuffer.ReadDataBlock(false, out int encTypeID, out uint encBlockType, out long encTimeStamp, fileReader);
+
+                    encoded = BitConverter.ToBoolean(wasEncoded, 0);
+
                     header = dataBuffer.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp, fileReader);
                     fileReader.Dispose();
                 }
@@ -114,6 +160,10 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads a data block from the input stream, until EOF is hit or the timestamp to read to is found.
+        /// </summary>
+        /// <param name="timeToReadTo">Timestamp to read to, long.MaxValue for EOF</param>
         public void ReadData(long timeToReadTo = long.MaxValue)
         {
             try
@@ -138,6 +188,10 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads a single data block from the input stream.
+        /// </summary>
+        /// <param name="readType">The expected data type to read, or null to use a registered type</param>
         public void ReadNextData(Type readType = null)
         {
             try
@@ -157,6 +211,14 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Reads the next block of data from the buffer or a given stream. Read data is put on the
+        /// observable stream for use by outside applications.
+        /// </summary>
+        /// <param name="reader">The stream to read from , if not using the data buffer</param>
+        /// <param name="readType">Data type to read, null if using a registered type</param>
+        /// <param name="timeToReadTo">Timestamp to read to, long.MaxValue for EOF</param>
+        /// <returns></returns>
         private bool DoReadNextData(BinaryReader reader, Type readType = null, long timeToReadTo = long.MaxValue)
         {
             byte[] dataBlock = null;
@@ -201,9 +263,16 @@ namespace AYLib.GenericDataLogger
             return true;
         }
 
-        public bool Verify(uint major, uint minor, uint revision)
+        /// <summary>
+        /// Verify if the given version numbers are compatible with the read header.
+        /// </summary>
+        /// <param name="majorVersion">Major version number</param>
+        /// <param name="minorVersion">Minor version number</param>
+        /// <param name="revision">Revision number</param>
+        /// <returns></returns>
+        public bool Verify(uint majorVersion, uint minorVersion, uint revision)
         {
-            return HeaderData?.Verify(major, minor, revision) ?? false;
+            return HeaderData?.Verify(majorVersion, minorVersion, revision) ?? false;
         }
 
         #region IDisposable Support

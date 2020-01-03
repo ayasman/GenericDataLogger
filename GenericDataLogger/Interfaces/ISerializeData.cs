@@ -9,6 +9,9 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public interface ISerializeData
     {
+        /// <summary>
+        /// Unique ID of the data block being serialized. Used to maintain data cache.
+        /// </summary>
         Guid SerializeDataID { get; }
     }
 }

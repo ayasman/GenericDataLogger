@@ -34,11 +34,20 @@ CachedSerializeWriter writer = new CachedSerializeWriter(testOutputFile, true, f
 writer.RegisterVersion(1, 5, 43);
 writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
-writer.Update(testData); // Updates the data cache with latest object
+{
+	// ... Game Update Loop ...
+	writer.Update(testData); // Updates the data cache with latest object
 
-writer.WriteBuffer(1000); // Writes the current cache to the buffer, with the timestamp of 1000
+	// Every 1000 ms
+	{
+		writer.WriteBuffer(1000); // Writes the current cache to the buffer, with the timestamp of 1000
+	}
+}
 
-writer.FlushToStream(); // Push the buffer to the file stream
+{
+	// ... On IO thread ...
+	writer.FlushToStream(); // Push the buffer to the file stream
+}
 
 writer.Dispose(); // Close everything
 ```
@@ -53,19 +62,23 @@ writer.Dispose(); // Close everything
 
 ```C#
 // Initialize reader
-CachedSerializeReader reader = new CachedSerializeReader(testInputFile, true);
+CachedSerializeReader reader = new CachedSerializeReader(testInputFile);
 
 // Subscribe to the reader. As data in read, this subscription will trigger (reactive stream)
 reader.WhenDataRead.Subscribe(data =>
     {
         var actualData = data.DataBlock as TestData;
+		// ... Do stuff with actual data ...
     });
 
 reader.ReadFromStream(); // Read all data from the file stream to the data buffer
 
 reader.ReadHeader(); // Read the header information from the buffer
 
-reader.ReadData(); // Read all data from the buffer (use overloads to go to a timestamp)
+{
+	// ... Read Update Loop ...
+	reader.ReadData(1000); // Read all data from the buffer (use overloads to go to a timestamp)
+}
 
 reader.Dispose(); // Close everything
 ```

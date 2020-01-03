@@ -6,6 +6,10 @@ using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
+    /// <summary>
+    /// Helper class that wraps around a memory stream to write binary data in a common header/block format, using
+    /// MessagePack as the main read/write library.
+    /// </summary>
     public class WriteDataBuffer : IDisposable
     {
         static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
@@ -14,11 +18,17 @@ namespace AYLib.GenericDataLogger
         private BinaryWriter binaryWriter;
         private object writerLock = new object();
 
+        /// <summary>
+        /// Constructor. Initializes the internal memory stream and binary writer for it.
+        /// </summary>
         public WriteDataBuffer()
         {
             InitStreams();
         }
 
+        /// <summary>
+        /// Initializes the memory streams and writer.
+        /// </summary>
         private void InitStreams()
         {
             lock (writerLock)
@@ -40,6 +50,14 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Writes a block of data to the backing stream. First the length of a header block, then the header block, then the data block.
+        /// </summary>
+        /// <param name="data">The actual data block to write to the stream (already encoded)</param>
+        /// <param name="typeID">Registration ID for the data type</param>
+        /// <param name="blockType">The block type for the written data</param>
+        /// <param name="timeStamp">Write time of the data</param>
+        /// <param name="encode">If the data should be LZ4 encoded</param>
         public void WriteDataBlock(byte[] data, int typeID, uint blockType, long timeStamp, bool encode)
         {
             lock (writerLock)
@@ -63,6 +81,10 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// Writes the backing stream data to a target stream, then resets the backing stream (re-initialize).
+        /// </summary>
+        /// <param name="target">Target stream to write to</param>
         public void WriteTo(Stream target)
         {
             lock (writerLock)
@@ -84,6 +106,9 @@ namespace AYLib.GenericDataLogger
             }
         }
 
+        /// <summary>
+        /// True if the backing stream is created and can be written to.
+        /// </summary>
         public bool IsStreamOpen => memoryStream != null && memoryStream.CanWrite;
 
         #region IDisposable Support
