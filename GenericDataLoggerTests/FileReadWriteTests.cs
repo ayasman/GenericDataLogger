@@ -40,7 +40,7 @@ namespace GenericDataLoggerTests
 
             var readTestData = new List<TestData>();
 
-            CachedSerializeReader reader = new CachedSerializeReader(testOutputFile, true);
+            CachedSerializeReader reader = new CachedSerializeReader(testOutputFile);
 
             reader.WhenDataRead.Subscribe(data =>
             {

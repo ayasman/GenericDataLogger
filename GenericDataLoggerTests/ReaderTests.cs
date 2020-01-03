@@ -85,7 +85,7 @@ namespace GenericDataLoggerTests
         public void TestNoStream()
         {
             Stream ms = null;
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
 
             Assert.Throws<Exception>(() => sut.ReadHeader());
             Assert.Throws<Exception>(() => sut.ReadData());
@@ -97,7 +97,7 @@ namespace GenericDataLoggerTests
         public void TestBadBuffer()
         {
             MemoryStream ms = new MemoryStream();
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
             sut.Dispose();
 
             Assert.Throws<Exception>(() => sut.ReadHeader());
@@ -121,7 +121,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
             sut.ReadHeader();
             sut.Dispose();
             writer.Dispose();
@@ -148,7 +148,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
             sut.ReadHeader();
             sut.Dispose();
             writer.Dispose();
@@ -173,7 +173,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
 
             sut.WhenDataRead.Subscribe(data =>
             {
@@ -200,7 +200,7 @@ namespace GenericDataLoggerTests
 
             ms.Position = 0;
 
-            CachedSerializeReader sut = new CachedSerializeReader(ms, false);
+            CachedSerializeReader sut = new CachedSerializeReader(ms);
 
             sut.WhenDataRead.Subscribe(data =>
             {
