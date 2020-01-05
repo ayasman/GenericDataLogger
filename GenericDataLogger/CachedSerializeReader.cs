@@ -1,5 +1,4 @@
-﻿using MessagePack;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -18,8 +17,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class CachedSerializeReader : IDisposable
     {
-        static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private Subject<ReadSerializeData> onDataRead = new Subject<ReadSerializeData>();
 
         private bool encoded = false;
@@ -87,7 +84,7 @@ namespace AYLib.GenericDataLogger
             }
             catch (Exception ex)
             {
-                throw new Exception("Error initializing binary file stream.", ex);
+                throw new StreamException("Error initializing binary file stream.", ex);
             }
         }
 
@@ -99,15 +96,15 @@ namespace AYLib.GenericDataLogger
             try
             {
                 if (dataBuffer == null)
-                    throw new Exception("Read buffer not open.");
+                    throw new StreamException("Read buffer not open.");
                 if (inputStream == null)
-                    throw new Exception("Cannot read from input stream, no input stream configured.");
+                    throw new StreamException("Cannot read from input stream, no input stream configured.");
 
                 dataBuffer.ReadFrom(inputStream);
             }
             catch (Exception ex)
             {
-                throw new Exception("Error reading from input stream.", ex);
+                throw new SerializerException("Error reading from input stream.", ex);
             }
         }
 
@@ -119,7 +116,7 @@ namespace AYLib.GenericDataLogger
             try
             {
                 if (dataBuffer == null)
-                    throw new Exception("Read buffer not open.");
+                    throw new StreamException("Read buffer not open.");
 
                 byte[] sigData = null;
                 byte[] header = null;
@@ -146,9 +143,9 @@ namespace AYLib.GenericDataLogger
                     fileReader.Dispose();
                 }
                 signature = new Guid(sigData);
-                Header localHeader = encoded ?
-                    MessagePackSerializer.Deserialize<Header>(header, lz4Options) :
-                    MessagePackSerializer.Deserialize<Header>(header, MessagePackSerializerOptions.Standard);
+
+                Header localHeader = SerializeProvider.DefaultProvider.Decode(true, encoded, typeof(Header), header) as Header;
+
                 localHeader.ResetRegistrationIDs();
 
                 if (headerData == null)
@@ -156,7 +153,7 @@ namespace AYLib.GenericDataLogger
             }
             catch (Exception ex)
             {
-                throw new Exception("Error reading header information.", ex);
+                throw new SerializerException("Error reading header information.", ex);
             }
         }
 
@@ -169,7 +166,7 @@ namespace AYLib.GenericDataLogger
             try
             {
                 if (dataBuffer == null)
-                    throw new Exception("Read buffer not open.");
+                    throw new StreamException("Read buffer not open.");
 
                 var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
 
@@ -184,7 +181,7 @@ namespace AYLib.GenericDataLogger
             }
             catch (Exception ex)
             {
-                throw new Exception("Error reading buffer information.", ex);
+                throw new SerializerException("Error reading buffer information.", ex);
             }
         }
 
@@ -197,7 +194,7 @@ namespace AYLib.GenericDataLogger
             try
             {
                 if (dataBuffer == null)
-                    throw new Exception("Read buffer not open.");
+                    throw new StreamException("Read buffer not open.");
 
                 var fileReader = new BinaryReader(inputStream, System.Text.Encoding.Default, true);
 
@@ -207,7 +204,7 @@ namespace AYLib.GenericDataLogger
             }
             catch (Exception ex)
             {
-                throw new Exception("Error reading buffer information.", ex);
+                throw new SerializerException("Error reading buffer information.", ex);
             }
         }
 
@@ -248,16 +245,14 @@ namespace AYLib.GenericDataLogger
             var dataType = readType ?? headerData.GetRegistrationType(typeID);
             if (dataType != null)
             {
-                var deserializedData = encoded ?
-                                            MessagePackSerializer.Deserialize(dataType, dataBlock, lz4Options) :
-                                            MessagePackSerializer.Deserialize(dataType, dataBlock);
+                var deserializedData = SerializeProvider.CurrentProvider.Decode(true, encoded, dataType, dataBlock);
+
                 onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
             }
             else
             {
-                var deserializedData = encoded ?
-                                            MessagePackSerializer.Typeless.Deserialize(dataBlock, lz4Options) :
-                                            MessagePackSerializer.Typeless.Deserialize(dataBlock);
+                var deserializedData = SerializeProvider.CurrentProvider.Decode(false, encoded, dataType, dataBlock);
+
                 onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
             }
             return true;

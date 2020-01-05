@@ -10,7 +10,7 @@ namespace AYLib.GenericDataLogger
     /// The block size identifies the size of the data to read.
     /// </summary>
     [MessagePackObject]
-    public class BlockMetadata
+    public class BlockMetadata : ISerializeData
     {
         /// <summary>
         /// The registered ID for the data type this header is created for.
@@ -35,6 +35,12 @@ namespace AYLib.GenericDataLogger
         /// </summary>
         [Key(3)]
         public uint BlockType { get; set; }
+
+        /// <summary>
+        /// Required by interface, but not really needed.
+        /// </summary>
+        [IgnoreMember]
+        public Guid SerializeDataID => new Guid();
 
         /// <summary>
         /// Default constructor, required for deserialization through MessagePack.

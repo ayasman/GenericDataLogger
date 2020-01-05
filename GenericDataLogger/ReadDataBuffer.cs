@@ -1,5 +1,4 @@
-﻿using MessagePack;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -11,8 +10,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class ReadDataBuffer : IDisposable
     {
-        static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private bool bufferFilled = false;
         private MemoryStream memoryStream;
         private BinaryReader binaryReader;
@@ -52,7 +49,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch(Exception ex)
                 {
-                    throw new Exception("Error creating binary reader streams.", ex);
+                    throw new StreamException("Error creating binary reader streams.", ex);
                 }
             }
         }
@@ -92,16 +89,14 @@ namespace AYLib.GenericDataLogger
                     BinaryReader localReader = overrideReader != null ? overrideReader : binaryReader;
 
                     if (localReader == null)
-                        throw new Exception("Binary reader not open.");
+                        throw new StreamException("Binary reader not open.");
 
                     lastBlockStartPosition = localReader.BaseStream.Position;
 
                     int metaBlockSize = localReader.ReadInt32();
                     byte[] metaDataBytes = localReader.ReadBytes(metaBlockSize);
 
-                    var metaData = encoded ?
-                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes, lz4Options) :
-                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+                    var metaData = SerializeProvider.DefaultProvider.Decode(true, encoded, typeof(BlockMetadata), metaDataBytes) as BlockMetadata;
 
                     retBlock = localReader.ReadBytes(metaData.BlockSize);
                     typeID = metaData.TypeID;
@@ -110,7 +105,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch(Exception ex)
                 {
-                    throw new Exception("Error reading data block information.", ex);
+                    throw new SerializerException("Error reading data block information.", ex);
                 }
             }
             return retBlock;
@@ -127,9 +122,9 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     if (memoryStream == null)
-                        throw new Exception("Reader memory stream not open.");
+                        throw new StreamException("Reader memory stream not open.");
                     if (source == null)
-                        throw new Exception("Source stream not open.");
+                        throw new StreamException("Source stream not open.");
 
                     source.Position = 0;
                     source.CopyTo(memoryStream);
@@ -138,7 +133,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error copying data to memory stream.", ex);
+                    throw new SerializerException("Error copying data to memory stream.", ex);
                 }
             }
         }
@@ -152,7 +147,7 @@ namespace AYLib.GenericDataLogger
             lock (readerLock)
             {
                 if (memoryStream == null)
-                    throw new Exception("Reader memory stream not open.");
+                    throw new StreamException("Reader memory stream not open.");
 
                 memoryStream.Position = lastBlockStartPosition;
             }
@@ -166,7 +161,7 @@ namespace AYLib.GenericDataLogger
             lock (readerLock)
             {
                 if (memoryStream == null)
-                    throw new Exception("Reader memory stream not open.");
+                    throw new StreamException("Reader memory stream not open.");
 
                 memoryStream.Position = 0;
             }

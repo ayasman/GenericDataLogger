@@ -1,6 +1,4 @@
-﻿using MessagePack;
-using MessagePack.Resolvers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -39,9 +37,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class CachedSerializeWriter : IDisposable
     {
-        private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-        private static readonly MessagePackSerializerOptions lz4ContractlessOptions = ContractlessStandardResolver.Options.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
 
@@ -103,7 +98,7 @@ namespace AYLib.GenericDataLogger
             }
             catch (Exception ex)
             {
-                throw new Exception("Error initializing binary file stream.", ex);
+                throw new StreamException("Error initializing binary file stream.", ex);
             }
         }
 
@@ -148,7 +143,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch(Exception ex)
                 {
-                    throw new Exception("Error updating data cache.", ex);
+                    throw new SerializerException("Error updating data cache.", ex);
                 }
             }
         }
@@ -165,7 +160,7 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     if (dataBuffer == null)
-                        throw new Exception("Write buffer not open.");
+                        throw new StreamException("Write buffer not open.");
 
                     if (!headerWritten)
                     {
@@ -184,7 +179,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error writing to data buffer.", ex);
+                    throw new SerializerException("Error writing to data buffer.", ex);
                 }
             }
         }
@@ -207,7 +202,7 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     if (dataBuffer == null)
-                        throw new Exception("Write buffer not open.");
+                        throw new StreamException("Write buffer not open.");
 
                     if (!headerWritten)
                     {
@@ -270,7 +265,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error writing to data buffer.", ex);
+                    throw new SerializerException("Error writing to data buffer.", ex);
                 }
             }
         }
@@ -283,15 +278,15 @@ namespace AYLib.GenericDataLogger
             try
             {
                 if (dataBuffer == null)
-                    throw new Exception("Write buffer not open.");
+                    throw new StreamException("Write buffer not open.");
                 if (outputStream == null)
-                    throw new Exception("Cannot write to output stream, no output stream configured.");
+                    throw new StreamException("Cannot write to output stream, no output stream configured.");
 
                 dataBuffer.WriteTo(outputStream);
             }
             catch (Exception ex)
             {
-                throw new Exception("Error writing to output stream.", ex);
+                throw new SerializerException("Error writing to output stream.", ex);
             }
         }
 
@@ -304,9 +299,7 @@ namespace AYLib.GenericDataLogger
             dataBuffer.WriteDataBlock(Common.Signature.ToByteArray(), -1, (uint)BlockDataTypes.Signature, timeStamp, false);
             dataBuffer.WriteDataBlock(BitConverter.GetBytes(encode), -1, (uint)BlockDataTypes.Signature, timeStamp, false);
             dataBuffer.WriteDataBlock(
-                encode ?
-                    MessagePackSerializer.Serialize(headerData, lz4Options) :
-                    MessagePackSerializer.Serialize(headerData),
+                SerializeProvider.DefaultProvider.Encode(true, encode, typeof(Header), headerData),
                 -1,
                 (uint)BlockDataTypes.Header,
                 timeStamp,
@@ -322,14 +315,7 @@ namespace AYLib.GenericDataLogger
         /// <returns>Serialized data</returns>
         private byte[] Encode(bool typed, Type dataType, ISerializeData data)
         {
-            return typed ?
-                encode ?
-                    MessagePackSerializer.Serialize(dataType, data, lz4Options) :
-                    MessagePackSerializer.Serialize(dataType, data, MessagePackSerializerOptions.Standard)
-                        :
-                encode ?
-                    MessagePackSerializer.Serialize(dataType, data, lz4ContractlessOptions) :
-                    MessagePackSerializer.Serialize(dataType, data, MessagePack.Resolvers.ContractlessStandardResolver.Options);
+            return SerializeProvider.CurrentProvider.Encode(typed, encode, dataType, data);
         }
 
         #region IDisposable Support

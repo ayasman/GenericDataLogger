@@ -1,5 +1,4 @@
-﻿using MessagePack;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -19,8 +18,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class DirectSerializeReader : IDisposable
     {
-        static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private object readerLock = new object();
         private Header headerData = new Header();
 
@@ -60,9 +57,7 @@ namespace AYLib.GenericDataLogger
                     int metaBlockSize = binaryReader.ReadInt32();
                     byte[] metaDataBytes = binaryReader.ReadBytes(metaBlockSize);
 
-                    var metaData = encoded ?
-                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes, lz4Options) :
-                                    MessagePackSerializer.Deserialize<BlockMetadata>(metaDataBytes);
+                    var metaData = SerializeProvider.DefaultProvider.Decode(true, encoded, typeof(BlockMetadata), metaDataBytes) as BlockMetadata;
 
                     typeID = metaData.TypeID;
                     timeStamp = metaData.TimeStamp;
@@ -72,19 +67,17 @@ namespace AYLib.GenericDataLogger
                     {
                         byte[] dataBlock = binaryReader.ReadBytes(metaData.BlockSize);
 
-                        var deserializedData = encoded ?
-                                                    MessagePackSerializer.Deserialize(dataType, dataBlock, lz4Options) :
-                                                    MessagePackSerializer.Deserialize(dataType, dataBlock);
+                        var deserializedData = SerializeProvider.CurrentProvider.Decode(true, encoded, dataType, dataBlock);
 
                         return new ReadSerializeData(timeStamp, deserializedData, BlockDataTypes.None);
                     }
                     else
-                        throw new Exception("Type not registered.");
+                        throw new SerializerException("Type not registered.");
                 }
             }
             catch (Exception ex)
             {
-                throw new Exception("Error reading buffer information.", ex);
+                throw new SerializerException("Error reading buffer information.", ex);
             }
         }
 

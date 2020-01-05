@@ -30,13 +30,15 @@ namespace GenericDataLoggerTests
             sut.Dispose();
         }
 
-        [Fact]
-        public void TestSerializeBufferWrite()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestSerializeBufferWrite(bool encoded)
         {
             WriteDataBuffer sut = new WriteDataBuffer();
             MemoryStream ms = new MemoryStream();
 
-            sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, false);
+            sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, encoded);
 
             sut.WriteTo(ms);
             Assert.NotEqual(0, ms.Length);
@@ -48,39 +50,28 @@ namespace GenericDataLoggerTests
             sut.Dispose();
         }
 
-        [Fact]
-        public void TestSerializeBufferWriteEncode()
-        {
-            WriteDataBuffer sut = new WriteDataBuffer();
-            MemoryStream ms = new MemoryStream();
-
-            sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, true);
-
-            sut.WriteTo(ms);
-
-            Assert.NotEqual(0, ms.Length);
-
-            sut.Dispose();
-        }
-
-        [Fact]
-        public void TestBadMemoryStreams()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestBadMemoryStreams(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
             WriteDataBuffer sut = new WriteDataBuffer();
             sut.Dispose();
 
             Assert.False(sut.IsStreamOpen);
-            Assert.Throws<Exception>(() => sut.WriteTo(ms));
-            Assert.Throws<Exception>(() => sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, false));
+            Assert.Throws<SerializerException>(() => sut.WriteTo(ms));
+            Assert.Throws<SerializerException>(() => sut.WriteDataBlock(Guid.Empty.ToByteArray(), 0, 0, 0, encoded));
         }
 
-        [Fact]
-        public void TestWritingHeader()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestWritingHeader(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
 
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.WriteBuffer(0);
@@ -97,25 +88,29 @@ namespace GenericDataLoggerTests
             Assert.Equal(lengthA, lengthB);
         }
 
-        [Fact]
-        public void TestNoStream()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestNoStream(bool encoded)
         {
             Stream ms = null;
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
 
             writer.WriteBuffer(0);
 
-            Assert.Throws<Exception>(() => writer.FlushToStream());
+            Assert.Throws<SerializerException>(() => writer.FlushToStream());
 
             writer.Dispose();
         }
 
-        [Fact]
-        public void TestWritePartialFull()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestWritePartialFull(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full);
             writer.RegisterType(typeof(TestDataSmall), BlockDataTypes.Partial);
             writer.WriteBuffer(0);
@@ -145,25 +140,29 @@ namespace GenericDataLoggerTests
             Assert.NotEqual(secondLength - initialLength, lastLength - secondLength);
         }
 
-        [Fact]
-        public void TestBadWriter()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestBadWriter(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter sut = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter sut = new CachedSerializeWriter(ms, encoded, false);
             sut.Dispose();
 
-            Assert.Throws<Exception>(() => sut.FlushToStream());
-            Assert.Throws<Exception>(() => sut.WriteBuffer(0));
-            Assert.Throws<Exception>(() => sut.Write(0, fixture.Create<TestData>()));
+            Assert.Throws<SerializerException>(() => sut.FlushToStream());
+            Assert.Throws<SerializerException>(() => sut.WriteBuffer(0));
+            Assert.Throws<SerializerException>(() => sut.Write(0, fixture.Create<TestData>()));
         }
 
-        [Fact]
-        public void TestRegisterUnmarkedClass()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestRegisterUnmarkedClass(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter sut = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter sut = new CachedSerializeWriter(ms, encoded, false);
 
-            Assert.Throws<Exception>(() => sut.RegisterType(typeof(UnmarkedTestData), BlockDataTypes.Full | BlockDataTypes.Partial));
+            Assert.Throws<SerializerException>(() => sut.RegisterType(typeof(UnmarkedTestData), BlockDataTypes.Full | BlockDataTypes.Partial));
 
             sut.Dispose();
         }

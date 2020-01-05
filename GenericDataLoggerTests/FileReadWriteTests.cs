@@ -24,10 +24,12 @@ namespace GenericDataLoggerTests
             }
         }
     
-        [Fact]
-        public void TestWritingReadingFileEncoded()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestWritingReadingFileEncoded(bool encoded)
         {
-            CachedSerializeWriter writer = new CachedSerializeWriter(testOutputFile, true, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(testOutputFile, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
 

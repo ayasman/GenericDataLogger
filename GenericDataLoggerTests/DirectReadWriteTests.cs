@@ -17,11 +17,13 @@ namespace GenericDataLoggerTests
 
         }
 
-        [Fact]
-        public void TestDirectWriting()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestDirectWriting(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
-            DirectSerializeWriter sut = new DirectSerializeWriter(false);
+            DirectSerializeWriter sut = new DirectSerializeWriter(encoded);
 
             sut.RegisterType(typeof(TestData));
 
@@ -29,23 +31,25 @@ namespace GenericDataLoggerTests
 
             Assert.NotEqual(0, ms.Length);
 
-            Assert.Throws<Exception>(() => sut.Write(null, fixture.Create<TestData>()));
-            Assert.Throws<Exception>(() => sut.Write(ms, fixture.Create<TestDataSmall>()));
+            Assert.Throws<SerializerException>(() => sut.Write(null, fixture.Create<TestData>()));
+            Assert.Throws<SerializerException>(() => sut.Write(ms, fixture.Create<TestDataSmall>()));
 
             sut.Dispose();
             ms.Dispose();
         }
 
-        [Fact]
-        public void TestDirectReading()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestDirectReading(bool encoded)
         {
             MemoryStream msSmall = new MemoryStream();
             MemoryStream msLarge = new MemoryStream();
 
-            DirectSerializeReader sut = new DirectSerializeReader(false);
+            DirectSerializeReader sut = new DirectSerializeReader(encoded);
             sut.RegisterType(typeof(TestData));
 
-            DirectSerializeWriter writerSut = new DirectSerializeWriter(false);
+            DirectSerializeWriter writerSut = new DirectSerializeWriter(encoded);
             writerSut.RegisterType(typeof(TestData));
             writerSut.RegisterType(typeof(TestDataSmall));
 
@@ -62,8 +66,8 @@ namespace GenericDataLoggerTests
 
             var retData = sut.Read(msLarge);
 
-            Assert.Throws<Exception>(() => sut.Read(null));
-            Assert.Throws<Exception>(() => sut.Read(msSmall));
+            Assert.Throws<SerializerException>(() => sut.Read(null));
+            Assert.Throws<SerializerException>(() => sut.Read(msSmall));
 
             Assert.IsType<ReadSerializeData>(retData);
             Assert.Equal(testData, retData.DataBlock as TestData, new TestDataEqualityComparer());

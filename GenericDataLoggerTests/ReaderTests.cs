@@ -27,12 +27,14 @@ namespace GenericDataLoggerTests
             sut.Dispose();
         }
 
-        [Fact]
-        public void TestSerializeBufferRead()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestSerializeBufferRead(bool encoded)
         {
             WriteDataBuffer writeBuf = new WriteDataBuffer();
             MemoryStream ms = new MemoryStream();
-            writeBuf.WriteDataBlock(Guid.Empty.ToByteArray(), 1, 2, 3, false);
+            writeBuf.WriteDataBlock(Guid.Empty.ToByteArray(), 1, 2, 3, encoded);
             writeBuf.WriteTo(ms);
 
             ReadDataBuffer sut = new ReadDataBuffer();
@@ -40,7 +42,7 @@ namespace GenericDataLoggerTests
 
             Assert.False(sut.IsEndOfStream);
 
-            var data = sut.ReadDataBlock(false, out int typeID, out uint blockType, out long timeStamp);
+            var data = sut.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp);
 
             Assert.Equal(Guid.Empty.ToByteArray(), data);
             Assert.Equal(1, typeID);
@@ -50,7 +52,7 @@ namespace GenericDataLoggerTests
             sut.ResetToStart();
             Assert.False(sut.IsEndOfStream);
 
-            sut.ReadDataBlock(false, out typeID, out blockType, out timeStamp);
+            sut.ReadDataBlock(encoded, out typeID, out blockType, out timeStamp);
 
             Assert.True(sut.IsEndOfStream);
             sut.RewindOneBlock();
@@ -60,25 +62,29 @@ namespace GenericDataLoggerTests
             writeBuf.Dispose();
         }
 
-        [Fact]
-        public void TestSerializeBufferNull()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestSerializeBufferNull(bool encoded)
         {
             ReadDataBuffer sut = new ReadDataBuffer();
-            Assert.Throws<Exception>(() => sut.ReadDataBlock(false, out int typeID, out uint blockType, out long timeStamp));
+            Assert.Throws<SerializerException>(() => sut.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp));
         }
 
-        [Fact]
-        public void TestBadMemoryStreams()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestBadMemoryStreams(bool encoded)
         {
             MemoryStream ms = new MemoryStream();
             ReadDataBuffer sut = new ReadDataBuffer();
             sut.Dispose();
 
             Assert.False(sut.IsStreamOpen);
-            Assert.Throws<Exception>(() => sut.ResetToStart());
-            Assert.Throws<Exception>(() => sut.RewindOneBlock());
-            Assert.Throws<Exception>(() => sut.ReadFrom(ms));
-            Assert.Throws<Exception>(() => sut.ReadDataBlock(false, out int typeID, out uint blockType, out long timeStamp));
+            Assert.Throws<StreamException>(() => sut.ResetToStart());
+            Assert.Throws<StreamException>(() => sut.RewindOneBlock());
+            Assert.Throws<SerializerException>(() => sut.ReadFrom(ms));
+            Assert.Throws<SerializerException>(() => sut.ReadDataBlock(encoded, out int typeID, out uint blockType, out long timeStamp));
         }
 
         [Fact]
@@ -87,8 +93,8 @@ namespace GenericDataLoggerTests
             Stream ms = null;
             CachedSerializeReader sut = new CachedSerializeReader(ms);
 
-            Assert.Throws<Exception>(() => sut.ReadHeader());
-            Assert.Throws<Exception>(() => sut.ReadData());
+            Assert.Throws<SerializerException>(() => sut.ReadHeader());
+            Assert.Throws<SerializerException>(() => sut.ReadData());
 
             sut.Dispose();
         }
@@ -100,20 +106,22 @@ namespace GenericDataLoggerTests
             CachedSerializeReader sut = new CachedSerializeReader(ms);
             sut.Dispose();
 
-            Assert.Throws<Exception>(() => sut.ReadHeader());
-            Assert.Throws<Exception>(() => sut.ReadData());
-            Assert.Throws<Exception>(() => sut.ReadFromStream());
+            Assert.Throws<SerializerException>(() => sut.ReadHeader());
+            Assert.Throws<SerializerException>(() => sut.ReadData());
+            Assert.Throws<SerializerException>(() => sut.ReadFromStream());
         }
 
-        [Fact]
-        public void TestReadHeader()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestReadHeader(bool encoded)
         {
             uint major = fixture.Create<uint>();
             uint minor = fixture.Create<uint>();
             uint rev = fixture.Create<uint>();
 
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(major, minor, rev);
             writer.WriteBuffer(0);
@@ -132,39 +140,14 @@ namespace GenericDataLoggerTests
             Assert.Equal(rev, sut.HeaderData.Revision);
         }
 
-        [Fact]
-        public void TestReadHeaderEncoded()
-        {
-            uint major = fixture.Create<uint>();
-            uint minor = fixture.Create<uint>();
-            uint rev = fixture.Create<uint>();
-
-            MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, true, false);
-            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
-            writer.RegisterVersion(major, minor, rev);
-            writer.WriteBuffer(0);
-            writer.FlushToStream();
-
-            ms.Position = 0;
-
-            CachedSerializeReader sut = new CachedSerializeReader(ms);
-            sut.ReadHeader();
-            sut.Dispose();
-            writer.Dispose();
-
-            Assert.Equal(Common.Signature, sut.Signature);
-            Assert.Equal(major, sut.HeaderData.MajorVersion);
-            Assert.Equal(minor, sut.HeaderData.MinorVersion);
-            Assert.Equal(rev, sut.HeaderData.Revision);
-        }
-
-        [Fact]
-        public void TestReadDataBlock()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestReadDataBlock(bool encoded)
         {
             var testData = fixture.Create<TestData>();
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
             writer.Update(testData);
@@ -188,12 +171,14 @@ namespace GenericDataLoggerTests
         }
 
 
-        [Fact]
-        public void TestReadSingleDataBlock()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestReadSingleDataBlock(bool encoded)
         {
             var testData = fixture.Create<TestData>();
             MemoryStream ms = new MemoryStream();
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false);
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, encoded, false);
             writer.RegisterVersion(fixture.Create<uint>(), fixture.Create<uint>(), fixture.Create<uint>());
             writer.Write(0, testData);
             writer.FlushToStream();

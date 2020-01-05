@@ -1,8 +1,6 @@
 ﻿using MessagePack;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Text;
 
 namespace AYLib.GenericDataLogger
 {
@@ -11,7 +9,7 @@ namespace AYLib.GenericDataLogger
     /// and the type registrations of the data being written to the file.
     /// </summary>
     [MessagePackObject]
-    public class Header
+    public class Header : ISerializeData
     {
         private Dictionary<Type, int> registrationIDs = new Dictionary<Type, int>();
 
@@ -38,6 +36,12 @@ namespace AYLib.GenericDataLogger
         /// </summary>
         [Key(3)]
         public uint Revision { get; set; }
+
+        /// <summary>
+        /// Required by interface, but not really needed.
+        /// </summary>
+        [IgnoreMember]
+        public Guid SerializeDataID => new Guid();
 
         /// <summary>
         /// Default constructor, required for deserialization through MessagePack.
@@ -89,8 +93,8 @@ namespace AYLib.GenericDataLogger
         /// <param name="outputType">The output type this is valid for (partial or full writes)</param>
         public void RegisterType(Type newType, BlockDataTypes outputType)
         {
-            if (newType.GetCustomAttribute<MessagePackObjectAttribute>(true) == null)
-                throw new Exception("Object being registered is not marked for serialization.");
+            if (!SerializeProvider.CurrentProvider.IsTypeValid(newType))
+                throw new SerializerException("Object being registered is not marked for serialization.");
 
             int id = TypeRegistrations.Count;
             TypeRegistrations.Add(id, new TypeRegistration(id, newType, outputType));

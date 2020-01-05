@@ -9,7 +9,7 @@ namespace AYLib.GenericDataLogger
     /// Definition of the type registration information, for serialization to file.
     /// </summary>
     [MessagePackObject]
-    public class TypeRegistration
+    public class TypeRegistration : ISerializeData
     {
         private Type linkedType;
 
@@ -44,6 +44,12 @@ namespace AYLib.GenericDataLogger
                 return linkedType;
             }
         }
+
+        /// <summary>
+        /// Required by interface, but not really needed.
+        /// </summary>
+        [IgnoreMember]
+        public Guid SerializeDataID => new Guid();
 
         /// <summary>
         /// Default constructor, required for deserialization through MessagePack.

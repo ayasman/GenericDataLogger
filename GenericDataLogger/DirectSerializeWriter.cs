@@ -1,6 +1,4 @@
-﻿using MessagePack;
-using MessagePack.Resolvers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -20,8 +18,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class DirectSerializeWriter : IDisposable
     {
-        private static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private object writerLock = new object();
         private Header headerData = new Header();
 
@@ -60,13 +56,11 @@ namespace AYLib.GenericDataLogger
                     var dataType = data.GetType();
                     var typeID = headerData.GetRegistrationID(dataType);
                     if (typeID == -2)
-                        throw new Exception("Type not registered.");
+                        throw new SerializerException("Type not registered.");
 
                     var dataBytes = Encode(encode, dataType, data);
 
-                    var metaBlock = encode ?
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, dataBytes.Length, (uint)BlockDataTypes.None), lz4Options) :
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, dataBytes.Length, (uint)BlockDataTypes.None));
+                    var metaBlock = SerializeProvider.DefaultProvider.Encode(true, encode, typeof(BlockMetadata), new BlockMetadata(typeID, timeStamp, dataBytes.Length, (uint)BlockDataTypes.None));
 
                     using (var binaryWriter = new BinaryWriter(outputStream, System.Text.Encoding.Default, true))
                     {
@@ -77,7 +71,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error writing to data buffer.", ex);
+                    throw new SerializerException("Error writing to data buffer.", ex);
                 }
             }
         }
@@ -91,10 +85,7 @@ namespace AYLib.GenericDataLogger
         /// <returns></returns>
         private byte[] Encode(bool encode, Type dataType, ISerializeData data)
         {
-            return
-                encode ?
-                    MessagePackSerializer.Serialize(dataType, data, lz4Options) :
-                    MessagePackSerializer.Serialize(dataType, data, MessagePackSerializerOptions.Standard);
+            return SerializeProvider.CurrentProvider.Encode(true, encode, dataType, data);
         }
 
         #region IDisposable Support

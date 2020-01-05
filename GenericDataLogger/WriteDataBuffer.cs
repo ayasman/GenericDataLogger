@@ -1,5 +1,4 @@
-﻿using MessagePack;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -12,8 +11,6 @@ namespace AYLib.GenericDataLogger
     /// </summary>
     public class WriteDataBuffer : IDisposable
     {
-        static readonly MessagePackSerializerOptions lz4Options = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
-
         private MemoryStream memoryStream;
         private BinaryWriter binaryWriter;
         private object writerLock = new object();
@@ -45,7 +42,7 @@ namespace AYLib.GenericDataLogger
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error creating binary writing streams.", ex);
+                    throw new StreamException("Error creating binary writing streams.", ex);
                 }
             }
         }
@@ -65,18 +62,17 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     if (binaryWriter == null)
-                        throw new Exception("Binary writer not open.");
-                    
-                    var metaBlock = encode ?
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType), lz4Options) :
-                                        MessagePackSerializer.Serialize(new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+                        throw new StreamException("Binary writer not open.");
+
+                    var metaBlock = SerializeProvider.DefaultProvider.Encode(true, encode, typeof(BlockMetadata), new BlockMetadata(typeID, timeStamp, data.Length, blockType));
+
                     binaryWriter.Write(metaBlock.Length);
                     binaryWriter.Write(metaBlock);
                     binaryWriter.Write(data);
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error writing data block.", ex);
+                    throw new SerializerException("Error writing data block.", ex);
                 }
             }
         }
@@ -92,16 +88,16 @@ namespace AYLib.GenericDataLogger
                 try
                 {
                     if (memoryStream == null)
-                        throw new Exception("Writer memory stream not open.");
+                        throw new StreamException("Writer memory stream not open.");
                     if (target == null)
-                        throw new Exception("Target stream not open.");
+                        throw new StreamException("Target stream not open.");
 
                     memoryStream.WriteTo(target);
                     InitStreams();
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Error writing to target stream.", ex);
+                    throw new SerializerException("Error writing to target stream.", ex);
                 }
             }
         }
