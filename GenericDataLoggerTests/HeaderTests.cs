@@ -15,13 +15,9 @@ namespace GenericDataLoggerTests
     {
         private Fixture fixture = new Fixture();
 
-        private readonly ITestOutputHelper _output;
-        private readonly ILogger _logger;
-
-        public HeaderTests(ITestOutputHelper output)
+        public HeaderTests()
         {
-            _output = output;
-            _logger = output.BuildLogger();
+
         }
 
         [Fact]
@@ -94,20 +90,6 @@ namespace GenericDataLoggerTests
             sut.ResetRegistrationIDs();
             var outID2 = sut.GetRegistrationID(typeof(TestData));
             Assert.Equal(0, outID2);
-        }
-
-        [Fact]
-        public void VerifyDebug()
-        {
-            var logger = new CacheLogger();
-
-            MemoryStream ms = new MemoryStream();
-
-            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false, logger);
-            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
-
-            writer.WriteBuffer(0);
-            writer.FlushToStream();
         }
     }
 }

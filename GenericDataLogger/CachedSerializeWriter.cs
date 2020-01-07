@@ -183,6 +183,8 @@ namespace AYLib.GenericDataLogger
                         (uint)BlockDataTypes.Immediate,
                         timeStamp,
                         encode);
+
+                    LogDataWrite(timeStamp, dataType, BlockDataTypes.Immediate, data);
                 }
                 catch (Exception ex)
                 {
@@ -237,6 +239,8 @@ namespace AYLib.GenericDataLogger
                                         (uint)BlockDataTypes.Partial,
                                         timeStamp,
                                         encode);
+
+                                    LogDataWrite(timeStamp, dataType, outputType, data);
                                 }
                             }
                         }
@@ -260,6 +264,8 @@ namespace AYLib.GenericDataLogger
                                         (uint)BlockDataTypes.Full,
                                         timeStamp,
                                         encode);
+
+                                    LogDataWrite(timeStamp, dataType, outputType, data);
                                 }
                             }
                         }
@@ -274,6 +280,21 @@ namespace AYLib.GenericDataLogger
                 {
                     throw new SerializerException("Error writing to data buffer.", ex);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Write a debug log entry for a data write.
+        /// </summary>
+        /// <param name="timeStamp">Data write timestamp</param>
+        /// <param name="dataType">Data type serialized</param>
+        /// <param name="outputType">Type of output</param>
+        /// <param name="writtenData">Actual data object used</param>
+        private void LogDataWrite(long timeStamp, Type dataType, BlockDataTypes outputType, ISerializeData writtenData)
+        {
+            if (logger != null && logger.IsEnabled(LogLevel.Debug))
+            {
+                logger?.LogDebug("Writing Data Block, Timestamp: {timeStamp}, Data Type: {dataType}, Write Type: {writeType}, Data: {data}", timeStamp, dataType, outputType, writtenData.ToString());
             }
         }
 
@@ -314,8 +335,11 @@ namespace AYLib.GenericDataLogger
 
             if (logger != null && logger.IsEnabled(LogLevel.Debug))
             {
-                logger?.LogDebug("Writing cached header information.");
+                logger?.LogDebug("Writing header information.");
                 logger?.LogDebug("Signature: {signature}", Common.Signature);
+                logger?.LogDebug("Encoded: {isEncoded}", encode);
+                logger?.LogDebug("Timestamp: {timestamp}", timeStamp);
+                logger?.LogDebug("Header Information:{newline}{header}", Environment.NewLine, headerData.ToString());
             }
         }
 

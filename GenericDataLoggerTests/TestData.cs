@@ -30,6 +30,11 @@ namespace GenericDataLoggerTests
         {
 
         }
+
+        public override string ToString()
+        {
+            return $"{SerializeDataID} -- {TestInt} -- {TestLong} -- {TestDouble} -- {TestString}";
+        }
     }
 
     [MessagePackObject]
@@ -44,6 +49,11 @@ namespace GenericDataLoggerTests
         public TestDataSmall()
         {
 
+        }
+
+        public override string ToString()
+        {
+            return $"{SerializeDataID} -- {TestInt}";
         }
     }
 

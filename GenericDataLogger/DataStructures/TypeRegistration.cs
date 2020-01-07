@@ -73,5 +73,14 @@ namespace AYLib.GenericDataLogger
             LongName = newType.AssemblyQualifiedName;
             OutputType = outputType;
         }
+
+        /// <summary>
+        /// Formatted string.
+        /// </summary>
+        /// <returns>Formatted string</returns>
+        public override string ToString()
+        {
+            return string.Format($"Type Registration: {RefID} - {LongName} - {OutputType}");
+        }
     }
 }

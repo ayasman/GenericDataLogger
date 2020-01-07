@@ -73,6 +73,11 @@ namespace AYLib.GenericDataLogger
                         binaryWriter.Write(metaBlock);
                         binaryWriter.Write(dataBytes);
                     }
+
+                    if (logger != null && logger.IsEnabled(LogLevel.Debug))
+                    {
+                        logger?.LogDebug("Writing Data Block, Timestamp: {timeStamp}, Data Type: {dataType}, Write Type: {writeType}, Data: {data}", timeStamp, dataType, BlockDataTypes.None, data.ToString());
+                    }
                 }
                 catch (Exception ex)
                 {

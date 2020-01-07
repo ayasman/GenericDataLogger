@@ -162,5 +162,17 @@ namespace AYLib.GenericDataLogger
                 return null;
             return TypeRegistrations[findID].ClassType;
         }
+
+        /// <summary>
+        /// Formatted string.
+        /// </summary>
+        /// <returns>Formatted string</returns>
+        public override string ToString()
+        {
+            string retVal = string.Format($"Version: {MajorVersion}.{MinorVersion}.{Revision}");
+            foreach (var reg in TypeRegistrations)
+                retVal += string.Format($"{Environment.NewLine}{reg.Value.ToString()}");
+            return retVal;
+        }
     }
 }

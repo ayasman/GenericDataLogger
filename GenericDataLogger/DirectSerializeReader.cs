@@ -74,6 +74,11 @@ namespace AYLib.GenericDataLogger
 
                         var deserializedData = SerializeProvider.CurrentProvider.Decode(true, encoded, dataType, dataBlock);
 
+                        if (logger != null && logger.IsEnabled(LogLevel.Debug))
+                        {
+                            logger?.LogDebug("Reading Data Block, Timestamp: {timeStamp}, Data Type: {dataType}, Write Type: {writeType}, Data: {data}", timeStamp, dataType, dataType, deserializedData.ToString());
+                        }
+
                         return new ReadSerializeData(timeStamp, deserializedData, BlockDataTypes.None);
                     }
                     else

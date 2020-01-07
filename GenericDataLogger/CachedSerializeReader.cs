@@ -157,6 +157,14 @@ namespace AYLib.GenericDataLogger
 
                 if (headerData == null)
                     headerData = localHeader;
+
+                if (logger != null && logger.IsEnabled(LogLevel.Debug))
+                {
+                    logger?.LogDebug("Reading header information.");
+                    logger?.LogDebug("Signature: {signature}", signature);
+                    logger?.LogDebug("Encoded: {isEncoded}", encoded);
+                    logger?.LogDebug("Header Information:{newline}{header}", Environment.NewLine, localHeader.ToString());
+                }
             }
             catch (Exception ex)
             {
@@ -250,18 +258,25 @@ namespace AYLib.GenericDataLogger
             }
 
             var dataType = readType ?? headerData.GetRegistrationType(typeID);
+            object deserializedData;
             if (dataType != null)
             {
-                var deserializedData = SerializeProvider.CurrentProvider.Decode(true, encoded, dataType, dataBlock);
+                deserializedData = SerializeProvider.CurrentProvider.Decode(true, encoded, dataType, dataBlock);
 
                 onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
             }
             else
             {
-                var deserializedData = SerializeProvider.CurrentProvider.Decode(false, encoded, dataType, dataBlock);
+                deserializedData = SerializeProvider.CurrentProvider.Decode(false, encoded, dataType, dataBlock);
 
                 onDataRead.OnNext(new ReadSerializeData(timeStamp, deserializedData, (BlockDataTypes)blockType));
             }
+
+            if (logger != null && logger.IsEnabled(LogLevel.Debug))
+            {
+                logger?.LogDebug("Reading Data Block, Timestamp: {timeStamp}, Data Type: {dataType}, Write Type: {writeType}, Data: {data}", timeStamp, dataType, dataType, deserializedData.ToString());
+            }
+
             return true;
         }
 
