@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -21,14 +22,18 @@ namespace AYLib.GenericDataLogger
         private object writerLock = new object();
         private Header headerData = new Header();
 
+        private readonly ILogger logger = null;
+
         private readonly bool encode = false;
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="encode">If the data is being LZ4 encoded</param>
-        public DirectSerializeWriter(bool encode)
+        /// <param name="logger">The logger to output debug/trace messages to</param>
+        public DirectSerializeWriter(bool encode, ILogger logger = null)
         {
+            this.logger = logger;
             this.encode = encode;
         }
 

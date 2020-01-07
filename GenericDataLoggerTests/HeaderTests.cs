@@ -1,10 +1,13 @@
 using AutoFixture;
 using AYLib.GenericDataLogger;
+using Divergic.Logging.Xunit;
 using MessagePack;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace GenericDataLoggerTests
 {
@@ -12,9 +15,13 @@ namespace GenericDataLoggerTests
     {
         private Fixture fixture = new Fixture();
 
-        public HeaderTests()
-        {
+        private readonly ITestOutputHelper _output;
+        private readonly ILogger _logger;
 
+        public HeaderTests(ITestOutputHelper output)
+        {
+            _output = output;
+            _logger = output.BuildLogger();
         }
 
         [Fact]
@@ -87,6 +94,20 @@ namespace GenericDataLoggerTests
             sut.ResetRegistrationIDs();
             var outID2 = sut.GetRegistrationID(typeof(TestData));
             Assert.Equal(0, outID2);
+        }
+
+        [Fact]
+        public void VerifyDebug()
+        {
+            var logger = new CacheLogger();
+
+            MemoryStream ms = new MemoryStream();
+
+            CachedSerializeWriter writer = new CachedSerializeWriter(ms, false, false, logger);
+            writer.RegisterType(typeof(TestData), BlockDataTypes.Full | BlockDataTypes.Partial);
+
+            writer.WriteBuffer(0);
+            writer.FlushToStream();
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -40,6 +41,8 @@ namespace AYLib.GenericDataLogger
         private Dictionary<Guid, ISerializeData> updatedData = new Dictionary<Guid, ISerializeData>();
         private HashSet<Guid> recentUpdates = new HashSet<Guid>();
 
+        private readonly ILogger logger = null;
+
         private object writerLock = new object();
 
         private readonly bool encode = false;
@@ -63,8 +66,10 @@ namespace AYLib.GenericDataLogger
         /// <param name="outputStream">The stream that will be written to on a call to FlushToStream</param>
         /// <param name="encode">If the data should be LZ4 encoded</param>
         /// <param name="clearBufferOnWrite">If the data cache should be cleared when the data is pushed to the buffer</param>
-        public CachedSerializeWriter(Stream outputStream, bool encode, bool clearBufferOnWrite)
+        /// <param name="logger">The logger to output debug/trace messages to</param>
+        public CachedSerializeWriter(Stream outputStream, bool encode, bool clearBufferOnWrite, ILogger logger = null)
         {
+            this.logger = logger;
             this.encode = encode;
             this.clearBufferOnWrite = clearBufferOnWrite;
             this.outputStream = outputStream;
@@ -74,11 +79,13 @@ namespace AYLib.GenericDataLogger
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="outputStream">The name/location of the file to write to on call to FlushToStream</param>
+        /// <param name="fileName">The name/location of the file to write to on call to FlushToStream</param>
         /// <param name="encode">If the data should be LZ4 encoded</param>
         /// <param name="clearBufferOnWrite">If the data cache should be cleared when the data is pushed to the buffer</param>
-        public CachedSerializeWriter(string fileName, bool encode, bool clearBufferOnWrite)
+        /// <param name="logger">The logger to output debug/trace messages to</param>
+        public CachedSerializeWriter(string fileName, bool encode, bool clearBufferOnWrite, ILogger logger = null)
         {
+            this.logger = logger;
             this.encode = encode;
             this.clearBufferOnWrite = clearBufferOnWrite;
             headerWritten = false;
@@ -304,6 +311,12 @@ namespace AYLib.GenericDataLogger
                 (uint)BlockDataTypes.Header,
                 timeStamp,
                 encode);
+
+            if (logger != null && logger.IsEnabled(LogLevel.Debug))
+            {
+                logger?.LogDebug("Writing cached header information.");
+                logger?.LogDebug("Signature: {signature}", Common.Signature);
+            }
         }
 
         /// <summary>

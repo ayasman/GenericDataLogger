@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Linq;
@@ -18,6 +19,8 @@ namespace AYLib.GenericDataLogger
     public class CachedSerializeReader : IDisposable
     {
         private Subject<ReadSerializeData> onDataRead = new Subject<ReadSerializeData>();
+
+        private readonly ILogger logger = null;
 
         private bool encoded = false;
 
@@ -48,8 +51,10 @@ namespace AYLib.GenericDataLogger
         /// Constructor.
         /// </summary>
         /// <param name="inputStream">The stream to read from to fill the buffer on a ReadFromStream call</param>
-        public CachedSerializeReader(Stream inputStream)
+        /// <param name="logger">The logger to output debug/trace messages to</param>
+        public CachedSerializeReader(Stream inputStream, ILogger logger = null)
         {
+            this.logger = logger;
             this.inputStream = inputStream;
         }
 
@@ -57,8 +62,10 @@ namespace AYLib.GenericDataLogger
         /// Constructor.
         /// </summary>
         /// <param name="fileName">The name/location of the file to read from on a ReadFromStream call</param>
-        public CachedSerializeReader(string fileName)
+        /// <param name="logger">The logger to output debug/trace messages to</param>
+        public CachedSerializeReader(string fileName, ILogger logger = null)
         {
+            this.logger = logger;
             Initialize(fileName);
         }
 
